@@ -821,8 +821,7 @@ PatchUsbXhciPortLimit1 (
   }
 
   //
-  // For macOS 26.0 (Darwin 25.0.0) and above use Tahoe-specific patch,
-  // otherwise use the original patch.
+  // Tahoe and newer use the no-argument setPortLocation() symbol.
   //
   if (OcMatchDarwinVersion (KernelVersion, KERNEL_VERSION_TAHOE_MIN, 0)) {
     Status = PatcherApplyGenericPatch (Patcher, &mRemoveUsbLimitIoP1Patch1Tahoe);
@@ -830,6 +829,15 @@ PatchUsbXhciPortLimit1 (
       DEBUG ((DEBUG_INFO, "OCAK: [FAIL] Failed to apply Tahoe port patch com.apple.iokit.IOUSBHostFamily part 1 - %r\n", Status));
     } else {
       DEBUG ((DEBUG_INFO, "OCAK: [OK] Patch success Tahoe port com.apple.iokit.IOUSBHostFamily part 1\n"));
+    }
+
+    //
+    // Keep the existing Tahoe path unchanged. Golden Gate compatibility
+    // kernels using Darwin 27 have no legacy mask or setPortLocationEj.
+    // Do not overwrite the result above with a lookup for that absent symbol.
+    //
+    if (OcMatchDarwinVersion (KernelVersion, KERNEL_VERSION (27, 0, 0), KERNEL_VERSION (27, 99, 99))) {
+      return Status;
     }
   } else {
     Status = PatcherApplyGenericPatch (Patcher, &mRemoveUsbLimitIoP1Patch1);

@@ -2995,6 +2995,14 @@ Kernel and kext changes apply with the following effective order:
   \textbf{Description}: Patch various kexts (AppleUSBXHCI.kext, AppleUSBXHCIPCI.kext,
   IOUSBHostFamily.kext) to remove USB port count limit of 15 ports.
 
+  On Darwin 27 compatibility kernels, the examined x86\_64 IOUSBHostFamily
+  implementation uses the no-argument
+  \texttt{AppleUSBHostPort::setPortLocation()} function and does not require
+  the legacy locationID mask patch. This exception is limited to Darwin 27;
+  the existing macOS 26 patch path is retained.
+  Matching a patch offline does not establish USB hardware functionality;
+  verify root port enumeration, unique locationIDs, and USB 3 operation after boot.
+
   \emph{Note}: This option should be avoided whenever possible. USB port limit
   is imposed by the amount of used bits in locationID format and there is no
   possible way to workaround this without heavy OS modification. The only
