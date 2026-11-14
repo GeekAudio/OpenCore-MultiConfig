@@ -45,7 +45,7 @@
 #define OCMC_KEY_POLL_MS    250
 #define OCMC_ROOT_NAME      L"config"
 #define OCMC_DEFAULT_VAR    L"OC-ConfigDefault"
-#define OCMC_BUILD_TAG      L"mc9"
+#define OCMC_BUILD_TAG      L"mc10"
 
 ///
 /// Esc as delivered by firmware that reports no scan code, only the
@@ -1241,16 +1241,37 @@ OcmEditBootArgs (
     // hidden part with '<', so long argument lists never wrap the screen.
     //
     if (mGfx) {
+      //
+      // Keep the caret anchored near the middle of the field. It moves freely
+      // within the left/right margins; the text scrolls only once the caret
+      // reaches the middle band, and scrolling stops at the text ends so the
+      // caret can then travel out to the actual edge. Mirrors a normal editor.
+      //
       Start = 0;
       if (Length > MaxLen) {
-        if (Cursor + 1 > MaxLen) {
-          Start = Cursor + 1 - MaxLen;
-        }
-        if (Start > Length - MaxLen) {
-          Start = Length - MaxLen;
-        }
-        if ((INTN)Start < 0) {
+        INTN Mid;
+        INTN MaxSt;
+        Mid   = (INTN)(MaxLen - 1) / 2;
+        MaxSt = (INTN)Length - (INTN)MaxLen + 1;
+        if ((INTN)Cursor <= Mid) {
+          //
+          // Close to the head of the string: the caret moves on its own and the
+          // text does not scroll yet.
+          //
           Start = 0;
+        } else if ((INTN)Cursor >= MaxSt + Mid) {
+          //
+          // Close to the tail: the caret moves on its own at the right edge.
+          //
+          Start = MaxSt;
+          if (Start < 0) {
+            Start = 0;
+          }
+        } else {
+          //
+          // Middle: pin the caret at the centre and scroll the text under it.
+          //
+          Start = (INTN)Cursor - Mid;
         }
       }
 
@@ -1319,14 +1340,21 @@ OcmEditBootArgs (
       MaxLen  = (Columns > 10) ? (Columns - 6) : 40;
       Start   = 0;
       if (Length > MaxLen) {
-        if (Cursor + 1 > MaxLen) {
-          Start = Cursor + 1 - MaxLen;
-        }
-        if (Start > Length - MaxLen) {
-          Start = Length - MaxLen;
-        }
-        if ((INTN)Start < 0) {
-          Start = 0;
+        {
+          INTN Mid;
+          INTN MaxSt;
+          Mid   = (INTN)(MaxLen - 1) / 2;
+          MaxSt = (INTN)Length - (INTN)MaxLen + 1;
+          if ((INTN)Cursor <= Mid) {
+            Start = 0;
+          } else if ((INTN)Cursor >= MaxSt + Mid) {
+            Start = MaxSt;
+            if (Start < 0) {
+              Start = 0;
+            }
+          } else {
+            Start = (INTN)Cursor - Mid;
+          }
         }
       }
 
