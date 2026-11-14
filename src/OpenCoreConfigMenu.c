@@ -45,7 +45,7 @@
 #define OCMC_KEY_POLL_MS    250
 #define OCMC_ROOT_NAME      L"config"
 #define OCMC_DEFAULT_VAR    L"OC-ConfigDefault"
-#define OCMC_BUILD_TAG      L"mc10"
+#define OCMC_BUILD_TAG      L"mc11"
 
 ///
 /// Esc as delivered by firmware that reports no scan code, only the
@@ -1184,7 +1184,6 @@ OcmEditBootArgs (
   UINTN          MaxLen;
   UINTN          Cursor;
   UINTN          Start;
-  CHAR16         Dbg[48];
   INTN           CardY;
   EFI_INPUT_KEY  Key;
   BOOLEAN        Accepted;
@@ -1192,7 +1191,6 @@ OcmEditBootArgs (
   Length   = StrLen (Args);
   Cursor   = Length;
   Accepted = FALSE;
-  Dbg[0]   = L'\0';
 
   OcmFlushKeys (32);
 
@@ -1330,11 +1328,6 @@ OcmEditBootArgs (
       OcmGfxFill (OCM_CONTENT_X, CardY + 208, 260, 20, OCMC_COLOR_PANEL);
       UnicodeSPrint (Line, sizeof (Line), L"LEN %u", (UINT32)Length);
       OcmGfxText (OCM_CONTENT_X, CardY + 212, Line, OCMC_COLOR_DIM, 1);
-
-      if (mTraceEnabled) {
-        OcmGfxFill (OCM_CONTENT_X, CardY + 236, OCM_CONTENT_W, 20, OCMC_COLOR_PANEL);
-        OcmGfxText (OCM_CONTENT_X, CardY + 240, Dbg, OCMC_COLOR_ACCENT, 1);
-      }
     } else {
       Columns = OcmGetColumns ();
       MaxLen  = (Columns > 10) ? (Columns - 6) : 40;
@@ -1383,28 +1376,10 @@ OcmEditBootArgs (
       gST->ConOut->SetAttribute (gST->ConOut, EFI_TEXT_ATTR (EFI_BLACK, EFI_LIGHTGRAY));
       OcmPrintAt (4, Line);
       gST->ConOut->SetAttribute (gST->ConOut, EFI_TEXT_ATTR (EFI_LIGHTGRAY, EFI_BLACK));
-
-      if (mTraceEnabled) {
-        gST->ConOut->SetAttribute (gST->ConOut, EFI_TEXT_ATTR (EFI_RED, EFI_BLACK));
-        OcmPrintAt (6, Dbg);
-        gST->ConOut->SetAttribute (gST->ConOut, EFI_TEXT_ATTR (EFI_LIGHTGRAY, EFI_BLACK));
-      }
     }
 
     if (EFI_ERROR (OcmReadKey (&Key, 30000))) {
       continue;
-    }
-
-    if (mTraceEnabled) {
-      UnicodeSPrint (
-        Dbg,
-        sizeof (Dbg),
-        L"scan=%02X char=%04X cur=%u len=%u",
-        (UINT32)Key.ScanCode,
-        (UINT32)Key.UnicodeChar,
-        (UINT32)Cursor,
-        (UINT32)Length
-        );
     }
 
     if (Key.UnicodeChar == 0x1A) {
