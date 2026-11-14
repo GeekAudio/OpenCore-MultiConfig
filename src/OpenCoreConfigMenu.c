@@ -45,7 +45,13 @@
 #define OCMC_KEY_POLL_MS    250
 #define OCMC_ROOT_NAME      L"config"
 #define OCMC_DEFAULT_VAR    L"OC-ConfigDefault"
-#define OCMC_BUILD_TAG      L"mc6"
+#define OCMC_BUILD_TAG      L"mc7"
+
+///
+/// Esc as delivered by firmware that reports no scan code, only the
+/// control character. Plenty of USB legacy implementations do this.
+///
+#define OCMC_CHAR_ESC       0x001B
 
 #define OCMC_APPLE_BOOT_GUID_STR  "7C436110-AB2A-4BBB-A880-FE41995C9F82"
 
@@ -1269,15 +1275,18 @@ OcmEditBootArgs (
       break;
     }
 
-    if ((Key.ScanCode == SCAN_ESC) || (Key.UnicodeChar == CHAR_CARRIAGE_RETURN)) {
+    if ((Key.ScanCode == SCAN_ESC) || (Key.UnicodeChar == OCMC_CHAR_ESC) ||
+        (Key.UnicodeChar == CHAR_CARRIAGE_RETURN)) {
       //
       // Esc and Enter both save: users expect leaving the field to keep it.
+      // Esc is matched on the character as well, because firmware may report
+      // it with an empty scan code.
       //
       Accepted = TRUE;
       break;
     }
 
-    if (Key.UnicodeChar == CHAR_BACKSPACE) {
+    if ((Key.UnicodeChar == CHAR_BACKSPACE) || (Key.UnicodeChar == 0x7F)) {
       if (Length > 0) {
         --Length;
         Args[Length] = L'\0';
@@ -1368,7 +1377,8 @@ OcConfigMenuSelect (
     //
     // Quiet mode: only react when Esc is held right after handoff.
     //
-    if (EFI_ERROR (OcmReadKey (&Key, OCMC_QUIET_POLL_MS)) || (Key.ScanCode != SCAN_ESC)) {
+    if (EFI_ERROR (OcmReadKey (&Key, OCMC_QUIET_POLL_MS)) ||
+        ((Key.ScanCode != SCAN_ESC) && (Key.UnicodeChar != OCMC_CHAR_ESC))) {
       OcmBuildPath (Names[DefaultIdx], mConfigPath);
       if (!OcmValidateConfig (Storage, mConfigPath)) {
         OcmTrace (Storage, "quiet: remembered config unreadable, using entry 1");
@@ -1490,7 +1500,8 @@ OcConfigMenuSelect (
       continue;
     }
 
-    if ((Key.UnicodeChar == CHAR_CARRIAGE_RETURN) || (Key.ScanCode == SCAN_ESC)) {
+    if ((Key.UnicodeChar == CHAR_CARRIAGE_RETURN) || (Key.ScanCode == SCAN_ESC) ||
+        (Key.UnicodeChar == OCMC_CHAR_ESC)) {
       //
       // Enter and Esc both boot the selected entry, so that leaving the menu
       // never silently switches to another configuration.
