@@ -1,0 +1,184 @@
+--- a/Library/OcMainLib/OpenCoreMisc.c
++++ b/Library/OcMainLib/OpenCoreMisc.c
+@@ -449,10 +449,18 @@
+   CONST CHAR8     *AsciiVault;
+   OCS_VAULT_MODE  Vault;
+   UINTN           PciDeviceInfoSize;
++  CONST CHAR16    *ConfigPath;
++
++  //
++  // Allow the user to pick one of several configuration files and to adjust
++  // boot arguments for this boot only. Must happen before the configuration
++  // is read, as the whole initialisation chain depends on it.
++  //
++  ConfigPath = OcConfigMenuSelect (Storage);
+ 
+   ConfigData = OcStorageReadFileUnicode (
+                  Storage,
+-                 OPEN_CORE_CONFIG_PATH,
++                 ConfigPath,
+                  &ConfigDataSize
+                  );
+ 
+--- a/Library/OcMainLib/OcMainLib.inf
++++ b/Library/OcMainLib/OcMainLib.inf
+@@ -22,6 +22,8 @@
+ 
+ [Sources]
+   OpenCoreAcpi.c
++  OpenCoreConfigGfx.c
++  OpenCoreConfigMenu.c
+   OpenCoreDevProps.c
+   OpenCoreKernel.c
+   OpenCoreKernelPatch.c
+--- a/Application/OpenCore/OpenCore.c
++++ b/Application/OpenCore/OpenCore.c
+@@ -136,6 +136,11 @@
+ 
+   DEBUG ((DEBUG_INFO, "OC: OcLoadNvramSupport...\n"));
+   OcLoadNvramSupport (Storage, &mOpenCoreConfiguration);
++  //
++  // Override boot-args chosen in the configuration menu. Written after the
++  // plist values as a volatile variable, so it lasts one boot only.
++  //
++  OcConfigMenuApplyBootArgs ();
+   DEBUG ((DEBUG_INFO, "OC: OcMiscMiddleInit...\n"));
+   OcMiscMiddleInit (
+     Storage,
+--- a/Include/Acidanthera/Library/OcMainLib.h
++++ b/Include/Acidanthera/Library/OcMainLib.h
+@@ -448,6 +448,134 @@
+ EFI_STATUS
+ OcDriverInfoDump (
+   IN EFI_FILE_PROTOCOL  *Root
++  );
++
++/**
++  Let the user pick a configuration file and optionally adjust boot arguments
++  for the current boot.
++
++  Must be called before the configuration file is read.
++
++  @param[in] Storage   Storage context of EFI/OC.
++
++  @return Path of the configuration file to load, relative to EFI/OC.
++**/
++CONST CHAR16 *
++OcConfigMenuSelect (
++  IN OC_STORAGE_CONTEXT  *Storage
++  );
++
++/**
++  Apply the boot arguments entered in the configuration menu.
++
++  Must be called after OcLoadNvramSupport so that the value wins over the one
++  from the plist. The variable is written as volatile, i.e. it is gone after a
++  reboot.
++**/
++VOID
++OcConfigMenuApplyBootArgs (
++  VOID
++  );
++
++/**
++  Initialise the GOP based renderer used by the configuration menu.
++
++  @retval TRUE   The renderer is ready, graphical drawing may be used.
++  @retval FALSE  No suitable framebuffer, the caller must use text mode.
++**/
++BOOLEAN
++OcmGfxInit (
++  VOID
++  );
++
++/**
++  Whether the graphical renderer is available.
++
++  @retval TRUE  Graphical drawing is possible.
++**/
++BOOLEAN
++OcmGfxReady (
++  VOID
++  );
++
++/**
++  Fill the whole screen.
++
++  @param[in] Rgb   Colour in 0x00RRGGBB form.
++**/
++VOID
++OcmGfxClear (
++  IN UINT32  Rgb
++  );
++
++/**
++  Fill a rectangle in virtual layout units.
++
++  @param[in] X      Left edge.
++  @param[in] Y      Top edge.
++  @param[in] W      Width.
++  @param[in] H      Height.
++  @param[in] Rgb    Colour in 0x00RRGGBB form.
++**/
++VOID
++OcmGfxFill (
++  IN INTN    X,
++  IN INTN    Y,
++  IN INTN    W,
++  IN INTN    H,
++  IN UINT32  Rgb
+   );
+ 
++/**
++  Draw an ASCII string in virtual layout units.
++
++  @param[in] X       Left edge.
++  @param[in] Y       Top edge.
++  @param[in] Text    Text to draw.
++  @param[in] Rgb     Colour in 0x00RRGGBB form.
++  @param[in] Scale   Character scale, 1 means an 8x16 cell.
++**/
++VOID
++OcmGfxText (
++  IN INTN          X,
++  IN INTN          Y,
++  IN CONST CHAR16  *Text,
++  IN UINT32        Rgb,
++  IN UINTN         Scale
++  );
++
++/**
++  Measure a string in virtual layout units.
++
++  @param[in] Text    Text to measure.
++  @param[in] Scale   Character scale.
++
++  @return Width in layout units.
++**/
++UINTN
++OcmGfxTextWidth (
++  IN CONST CHAR16  *Text,
++  IN UINTN         Scale
++  );
++
++/**
++  Width of the virtual layout in units.
++
++  @return Layout width.
++**/
++UINTN
++OcmGfxLayoutWidth (
++  VOID
++  );
++
++/**
++  Height of the virtual layout in units.
++
++  @return Layout height.
++**/
++UINTN
++OcmGfxLayoutHeight (
++  VOID
++  );
++
+ #endif // OC_MAIN_LIB

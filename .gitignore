@@ -1,0 +1,5 @@
+backup/
+out/*.zip
+*.bak-*
+.DS_Store
+Configs/
