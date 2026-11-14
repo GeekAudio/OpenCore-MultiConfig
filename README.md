@@ -49,7 +49,24 @@ push the rest of the screen around.
 | `SPACE` / `E` | Edit that entry's `boot-args` |
 | `ENTER` / `ESC` in the editor | Save and return |
 | `CTRL+Z` in the editor | Discard the edit |
-| `D` | Remember the selected entry as the default (NVRAM `OC-ConfigDefault`) |
+| `D` | Pin the selected entry immediately (it is remembered on boot anyway) |
+
+### Remembering the last boot
+
+The entry you boot is written to the NVRAM variable `OC-ConfigDefault` right after
+selection, before the configuration is parsed. On the next boot that entry is
+preselected, marked `LAST USED`, and booted when the countdown runs out — you only
+have to pick a different configuration when you actually want one.
+
+Two details worth knowing:
+
+- The write is skipped when the selection already matches, so the NVRAM cell is not
+  rewritten on every single boot.
+- If the remembered file was deleted or no longer parses, the countdown falls back to
+  the first entry instead of handing OpenCore an unreadable path.
+
+To skip the menu entirely, drop an empty file named `.quiet` into `EFI/OC/Configs/`;
+the menu then only appears if you hold `ESC` during handoff.
 
 ### How it works
 
@@ -146,7 +163,21 @@ OpenCore 只认一个固定路径的配置文件，而且在一切初始化之�
 | `SPACE` / `E` | 编辑该项的 `boot-args` |
 | 编辑器内 `ENTER` / `ESC` | 保存并返回 |
 | 编辑器内 `CTRL+Z` | 放弃本次修改 |
-| `D` | 把选中项记为默认（NVRAM `OC-ConfigDefault`） |
+| `D` | 立即固定当前项（其实启动时已经自动记住） |
+
+### 记住上次启动
+
+选中之后、解析配置之前，所选的项就会写进 NVRAM 变量 `OC-ConfigDefault`。下次开机会
+预先选中它、标上 `LAST USED`，倒计时走完直接启动 —— 只有真想换的时候才需要动手选。
+
+两个细节：
+
+- 选中项与已存值相同就不写，避免每次开机都去擦写同一个 NVRAM 单元。
+- 记住的那份文件被删掉或解析不了时，倒计时结束后会回退到第一项，而不是把坏路径丢给
+  OpenCore 造成黑屏。
+
+想完全跳过菜单，在 `EFI/OC/Configs/` 下放一个空文件 `.quiet`，之后只有开机时按住
+`ESC` 才会出现菜单。
 
 ### 原理
 

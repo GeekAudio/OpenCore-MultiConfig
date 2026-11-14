@@ -45,7 +45,7 @@
 #define OCMC_KEY_POLL_MS    250
 #define OCMC_ROOT_NAME      L"config"
 #define OCMC_DEFAULT_VAR    L"OC-ConfigDefault"
-#define OCMC_BUILD_TAG      L"mc4"
+#define OCMC_BUILD_TAG      L"mc6"
 
 #define OCMC_APPLE_BOOT_GUID_STR  "7C436110-AB2A-4BBB-A880-FE41995C9F82"
 
@@ -781,6 +781,215 @@ OcmGfxTextRight (
   @param[in] Seconds     Remaining countdown seconds, 0 when the user interacted.
   @param[in] Message     Optional status message.
 **/
+///
+/// Card geometry, in virtual layout units (the layout is 1920x1080).
+///
+#define OCM_CARD_W      920
+#define OCM_CARD_X      ((1920 - OCM_CARD_W) / 2)
+#define OCM_CARD_PAD    44
+#define OCM_CONTENT_X   (OCM_CARD_X + OCM_CARD_PAD)
+#define OCM_CONTENT_W   (OCM_CARD_W - OCM_CARD_PAD * 2)
+#define OCM_ROW_FIRST   128
+#define OCM_ROW_STEP    52
+#define OCM_ROW_H       44
+#define OCM_ROW_SEL     0x0E2A26
+
+///
+/// State of what is currently on screen, so that a key press only repaints
+/// the parts that actually changed instead of clearing the whole screen.
+///
+STATIC BOOLEAN  mCardDrawn;
+STATIC UINTN    mDrawnCount;
+STATIC UINTN    mDrawnSelected;
+STATIC UINTN    mDrawnDefault;
+STATIC BOOLEAN  mDrawnEdited;
+STATIC UINTN    mDrawnSeconds;
+STATIC CHAR16   mDrawnMessage[160];
+
+/**
+  Total card height for the given number of entries.
+
+  @param[in] Count   Number of entries.
+
+  @return Height in layout units.
+**/
+STATIC
+UINTN
+OcmCardHeight (
+  IN UINTN  Count
+  )
+{
+  if (Count == 0) {
+    Count = 1;
+  }
+
+  return OCM_ROW_FIRST + (Count - 1) * OCM_ROW_STEP + OCM_ROW_H + 24 + 22 + 22 + 92;
+}
+
+/**
+  Draw a single list row.
+
+  @param[in] Names       Configuration names.
+  @param[in] Index       Row index.
+  @param[in] Selected    Selected index.
+  @param[in] DefaultIdx  Index of the remembered default.
+  @param[in] CardY       Top edge of the card in layout units.
+**/
+STATIC
+VOID
+OcmDrawRowGfx (
+  IN CHAR16         (*Names)[OCMC_NAME_LEN],
+  IN UINTN          Index,
+  IN UINTN          Selected,
+  IN UINTN          DefaultIdx,
+  IN INTN           CardY
+  )
+{
+  CHAR16  Line[16];
+  CHAR16  Path[OCMC_PATH_LEN];
+  INTN    Y;
+
+  Y = CardY + OCM_ROW_FIRST + (INTN)Index * OCM_ROW_STEP;
+  OcmBuildPath (Names[Index], Path);
+  UnicodeSPrint (Line, sizeof (Line), L"%02u", (UINT32)(Index + 1));
+
+  OcmGfxFill (OCM_CARD_X, Y, OCM_CARD_W, OCM_ROW_H, OCMC_COLOR_PANEL);
+
+  if (Index == Selected) {
+    OcmGfxFill (OCM_CARD_X, Y, OCM_CARD_W, OCM_ROW_H, OCM_ROW_SEL);
+    OcmGfxFill (OCM_CARD_X, Y, 3, OCM_ROW_H, OCMC_COLOR_ACCENT);
+    OcmGfxText (OCM_CONTENT_X + 20, Y + 14, Line, OCMC_COLOR_ACCENT, 1);
+    OcmGfxText (OCM_CONTENT_X + 92, Y + 14, Path, OCMC_COLOR_FG, 1);
+    if (Index == DefaultIdx) {
+      OcmGfxTextRight (OCM_CONTENT_X + OCM_CONTENT_W - 20, Y + 16, L"LAST USED", OCMC_COLOR_ACCENT2, 1);
+    }
+  } else {
+    OcmGfxText (OCM_CONTENT_X + 20, Y + 14, Line, OCMC_COLOR_DIM, 1);
+    OcmGfxText (OCM_CONTENT_X + 92, Y + 14, Path, OCMC_COLOR_FG, 1);
+    if (Index == DefaultIdx) {
+      OcmGfxTextRight (OCM_CONTENT_X + OCM_CONTENT_W - 20, Y + 16, L"LAST USED", OCMC_COLOR_DIM, 1);
+    }
+  }
+}
+
+/**
+  Draw the boot-args status line.
+
+  @param[in] Selected    Selected index.
+  @param[in] CardY       Top edge of the card.
+  @param[in] Count       Number of entries.
+**/
+STATIC
+VOID
+OcmDrawStatusGfx (
+  IN UINTN  Selected,
+  IN INTN   CardY,
+  IN UINTN  Count
+  )
+{
+  INTN  Y;
+
+  Y = CardY + OCM_ROW_FIRST + (INTN)(Count - 1) * OCM_ROW_STEP + OCM_ROW_H + 24 + 22;
+
+  OcmGfxFill (OCM_CONTENT_X + 132, Y - 2, 360, 20, OCMC_COLOR_PANEL);
+  OcmGfxText (
+    OCM_CONTENT_X + 132,
+    Y,
+    mArgsEdited[Selected] ? L"EDITED FOR THIS BOOT" : L"FROM CONFIG",
+    OCMC_COLOR_ACCENT,
+    1
+    );
+}
+
+/**
+  Draw the whole card from scratch.
+
+  @param[in] Names       Configuration names.
+  @param[in] Count       Number of entries.
+  @param[in] Selected    Selected index.
+  @param[in] DefaultIdx  Index of the remembered default.
+  @param[in] Seconds     Remaining countdown seconds.
+  @param[in] Message     Optional status message.
+**/
+STATIC
+VOID
+OcmDrawCardGfx (
+  IN CHAR16         (*Names)[OCMC_NAME_LEN],
+  IN UINTN          Count,
+  IN UINTN          Selected,
+  IN UINTN          DefaultIdx,
+  IN UINTN          Seconds,
+  IN CONST CHAR16   *Message
+  )
+{
+  CHAR16  Line[160];
+  UINTN   Height;
+  INTN    CardY;
+  INTN    StatusY;
+  INTN    FooterY;
+  UINTN   Index;
+
+  Height = OcmCardHeight (Count);
+  CardY  = (INTN)((1080 - Height) / 2);
+
+  OcmGfxClear (OCMC_COLOR_BG);
+
+  OcmGfxFill (OCM_CARD_X, (INTN)CardY, OCM_CARD_W, (INTN)Height, OCMC_COLOR_PANEL);
+  OcmGfxFill (OCM_CARD_X, (INTN)CardY, OCM_CARD_W, 3, OCMC_COLOR_ACCENT);
+  OcmGfxFill (OCM_CARD_X, (INTN)CardY + 3, 1, (INTN)Height - 3, OCMC_COLOR_LINE);
+  OcmGfxFill (OCM_CARD_X + OCM_CARD_W - 1, (INTN)CardY + 3, 1, (INTN)Height - 3, OCMC_COLOR_LINE);
+  OcmGfxFill (OCM_CARD_X, (INTN)CardY + (INTN)Height - 1, OCM_CARD_W, 1, OCMC_COLOR_LINE);
+
+  OcmGfxText (OCM_CONTENT_X, CardY + 46, L"OCMC  //  MULTI-CONFIG", OCMC_COLOR_FG, 2);
+  UnicodeSPrint (Line, sizeof (Line), L"BUILD %s   OPENCORE 1.0.8", OCMC_BUILD_TAG);
+  OcmGfxTextRight (OCM_CONTENT_X + OCM_CONTENT_W, CardY + 58, Line, OCMC_COLOR_DIM, 1);
+
+  OcmGfxFill (OCM_CONTENT_X, CardY + 100, OCM_CONTENT_W, 1, OCMC_COLOR_LINE);
+
+  for (Index = 0; Index < Count; ++Index) {
+    OcmDrawRowGfx (Names, Index, Selected, DefaultIdx, CardY);
+  }
+
+  StatusY = CardY + OCM_ROW_FIRST + (INTN)(Count - 1) * OCM_ROW_STEP + OCM_ROW_H + 24;
+  OcmGfxFill (OCM_CONTENT_X, StatusY, OCM_CONTENT_W, 1, OCMC_COLOR_LINE);
+  OcmGfxText (OCM_CONTENT_X, StatusY + 22, L"BOOT-ARGS", OCMC_COLOR_DIM, 1);
+  OcmGfxTextRight (OCM_CONTENT_X + OCM_CONTENT_W, StatusY + 23, L"[SPACE] EDIT", OCMC_COLOR_ACCENT2, 1);
+  OcmDrawStatusGfx (Selected, CardY, Count);
+
+  if (Message != NULL) {
+    OcmGfxText (OCM_CONTENT_X, StatusY + 52, Message, OCMC_COLOR_WARN, 1);
+  }
+
+  FooterY = CardY + (INTN)Height - 64;
+  OcmGfxFill (OCM_CONTENT_X, FooterY, OCM_CONTENT_W, 1, OCMC_COLOR_LINE);
+  OcmGfxText (OCM_CONTENT_X, FooterY + 22, L"[UP/DOWN] SELECT", OCMC_COLOR_DIM, 1);
+  OcmGfxText (OCM_CONTENT_X + 260, FooterY + 22, L"[ENTER/ESC] BOOT", OCMC_COLOR_DIM, 1);
+  OcmGfxText (OCM_CONTENT_X + 520, FooterY + 22, L"[D] REMEMBER", OCMC_COLOR_DIM, 1);
+
+  mCardDrawn    = TRUE;
+  mDrawnCount   = Count;
+  mDrawnSelected = Selected;
+  mDrawnDefault = DefaultIdx;
+  mDrawnEdited  = mArgsEdited[Selected];
+  mDrawnSeconds = Seconds;
+  if (Message != NULL) {
+    StrCpyS (mDrawnMessage, ARRAY_SIZE (mDrawnMessage), Message);
+  } else {
+    mDrawnMessage[0] = L'\0';
+  }
+}
+
+/**
+  Draw the configuration menu with the graphical renderer, repainting only the
+  parts that changed since the previous call.
+
+  @param[in] Names       Configuration names.
+  @param[in] Count       Number of entries.
+  @param[in] Selected    Selected index.
+  @param[in] DefaultIdx  Index of the remembered default.
+  @param[in] Seconds     Remaining countdown seconds, 0 when the user interacted.
+  @param[in] Message     Optional status message.
+**/
 STATIC
 VOID
 OcmDrawMenuGfx (
@@ -792,77 +1001,65 @@ OcmDrawMenuGfx (
   IN CONST CHAR16   *Message
   )
 {
-  CHAR16  Line[256];
-  CHAR16  Path[OCMC_PATH_LEN];
-  CHAR16  DefPath[OCMC_PATH_LEN];
-  UINTN   Index;
-  INTN    Row;
+  CHAR16  Line[160];
+  UINTN   Height;
+  INTN    CardY;
+  INTN    StatusY;
+  INTN    FooterY;
 
-  OcmGfxClear (OCMC_COLOR_BG);
-
-  OcmGfxFill (0, 0, 960, 68, OCMC_COLOR_PANEL);
-  OcmGfxFill (0, 66, 960, 2, OCMC_COLOR_ACCENT);
-  OcmGfxText (32, 18, L"OCMC  //  MULTI-CONFIG", OCMC_COLOR_FG, 2);
-
-  UnicodeSPrint (Line, sizeof (Line), L"OPENCORE 1.0.8   BUILD %s", OCMC_BUILD_TAG);
-  OcmGfxTextRight (928, 26, Line, OCMC_COLOR_DIM, 1);
-
-  for (Index = 0; Index < Count; ++Index) {
-    Row = 74 + (INTN)Index * 50;
-    OcmBuildPath (Names[Index], Path);
-    UnicodeSPrint (Line, sizeof (Line), L"%02u", (UINT32)(Index + 1));
-
-    if (Index == Selected) {
-      OcmGfxFill (32, Row, 896, 44, OCMC_COLOR_ACCENT);
-      OcmGfxFill (32, Row, 6, 44, OCMC_COLOR_DARK);
-      OcmGfxText (56, Row + 14, Line, OCMC_COLOR_DARK, 1);
-      OcmGfxText (108, Row + 14, Path, OCMC_COLOR_DARK, 1);
-      if (Index == DefaultIdx) {
-        OcmGfxTextRight (906, Row + 14, L"DEFAULT", OCMC_COLOR_DARK, 1);
-      }
-    } else {
-      OcmGfxText (56, Row + 14, Line, OCMC_COLOR_DIM, 1);
-      OcmGfxText (108, Row + 14, Path, OCMC_COLOR_FG, 1);
-      if (Index == DefaultIdx) {
-        OcmGfxTextRight (906, Row + 14, L"DEFAULT", OCMC_COLOR_DIM, 1);
-      }
-    }
+  if (!mCardDrawn || (mDrawnCount != Count)) {
+    OcmDrawCardGfx (Names, Count, Selected, DefaultIdx, Seconds, Message);
+    return;
   }
 
-  OcmGfxFill (32, 250, 896, 1, OCMC_COLOR_LINE);
-  OcmGfxText (32, 268, L"BOOT-ARGS", OCMC_COLOR_DIM, 1);
-  OcmGfxText (
-    168,
-    268,
-    mArgsEdited[Selected] ? L"EDITED FOR THIS BOOT" : L"FROM CONFIG",
-    OCMC_COLOR_ACCENT,
-    1
-    );
-  OcmGfxTextRight (928, 268, L"[SPACE] EDIT", OCMC_COLOR_ACCENT2, 1);
+  Height  = OcmCardHeight (Count);
+  CardY   = (INTN)((1080 - Height) / 2);
+  StatusY = CardY + OCM_ROW_FIRST + (INTN)(Count - 1) * OCM_ROW_STEP + OCM_ROW_H + 24;
+  FooterY = CardY + (INTN)Height - 64;
 
-  OcmGfxFill (32, 316, 896, 1, OCMC_COLOR_LINE);
-  OcmGfxText (32, 336, L"SELECTED", OCMC_COLOR_DIM, 1);
-  OcmGfxText (168, 336, Path, OCMC_COLOR_FG, 1);
-  OcmBuildPath (Names[DefaultIdx], DefPath);
-  OcmGfxText (32, 360, L"DEFAULT", OCMC_COLOR_DIM, 1);
-  OcmGfxText (168, 360, DefPath, OCMC_COLOR_FG, 1);
-  OcmGfxText (32, 384, L"MODE", OCMC_COLOR_DIM, 1);
-  OcmGfxText (168, 384, L"TEMPORARY OVERRIDE, VOLATILE NVRAM", OCMC_COLOR_FG, 1);
+  //
+  // Selection moved: repaint the two affected rows only.
+  //
+  if (Selected != mDrawnSelected) {
+    OcmDrawRowGfx (Names, mDrawnSelected, Selected, DefaultIdx, CardY);
+    OcmDrawRowGfx (Names, Selected, Selected, DefaultIdx, CardY);
+    mDrawnSelected = Selected;
+  } else if (DefaultIdx != mDrawnDefault) {
+    //
+    // The default marker moved, repaint the rows that carry it.
+    //
+    OcmDrawRowGfx (Names, mDrawnDefault, Selected, DefaultIdx, CardY);
+    OcmDrawRowGfx (Names, DefaultIdx, Selected, DefaultIdx, CardY);
+    mDrawnDefault = DefaultIdx;
+  }
+
+  if (mArgsEdited[Selected] != mDrawnEdited) {
+    OcmDrawStatusGfx (Selected, CardY, Count);
+    mDrawnEdited = mArgsEdited[Selected];
+  }
 
   if (Message != NULL) {
-    OcmGfxText (32, 416, Message, OCMC_COLOR_WARN, 1);
+    if (StrCmp (Message, mDrawnMessage) != 0) {
+      OcmGfxFill (OCM_CONTENT_X, StatusY + 50, OCM_CONTENT_W, 20, OCMC_COLOR_PANEL);
+      OcmGfxText (OCM_CONTENT_X, StatusY + 52, Message, OCMC_COLOR_WARN, 1);
+      StrCpyS (mDrawnMessage, ARRAY_SIZE (mDrawnMessage), Message);
+    }
+  } else if (mDrawnMessage[0] != L'\0') {
+    OcmGfxFill (OCM_CONTENT_X, StatusY + 50, OCM_CONTENT_W, 20, OCMC_COLOR_PANEL);
+    mDrawnMessage[0] = L'\0';
   }
 
-  OcmGfxFill (0, 470, 960, 1, OCMC_COLOR_LINE);
-  OcmGfxText (32, 482, L"[UP/DOWN] SELECT", OCMC_COLOR_DIM, 1);
-  OcmGfxText (216, 482, L"[ENTER/ESC] BOOT", OCMC_COLOR_DIM, 1);
-  OcmGfxText (392, 482, L"[D] SET DEFAULT", OCMC_COLOR_DIM, 1);
+  if (Seconds != mDrawnSeconds) {
+    OcmGfxFill (OCM_CONTENT_X + OCM_CONTENT_W - 176, FooterY + 20, 176, 20, OCMC_COLOR_PANEL);
+    if (Seconds > 0) {
+      UnicodeSPrint (Line, sizeof (Line), L"AUTO BOOT %u s", (UINT32)Seconds);
+      OcmGfxTextRight (OCM_CONTENT_X + OCM_CONTENT_W, FooterY + 22, Line, OCMC_COLOR_ACCENT, 1);
+    }
 
-  if (Seconds > 0) {
-    UnicodeSPrint (Line, sizeof (Line), L"AUTO BOOT %u s", (UINT32)Seconds);
-    OcmGfxTextRight (928, 482, Line, OCMC_COLOR_ACCENT, 1);
+    mDrawnSeconds = Seconds;
   }
 }
+
 
 /**
   Draw the configuration menu.
@@ -905,7 +1102,7 @@ OcmDrawMenu (
   UnicodeSPrint (Line, sizeof (Line), L"  OpenCore Multi-Config  (%s)", OCMC_BUILD_TAG);
   OcmPrintAt (1, Line);
   gST->ConOut->SetAttribute (gST->ConOut, EFI_TEXT_ATTR (EFI_DARKGRAY, EFI_BLACK));
-  OcmPrintAt (2, L"  Up/Down select   Enter/ESC boot   SPACE/E edit boot-args   D default");
+  OcmPrintAt (2, L"  Up/Down select   Enter/ESC boot   SPACE/E edit boot-args   D remember");
   OcmPrintAt (3, L"");
 
   for (Index = 0; Index < Count; ++Index) {
@@ -916,7 +1113,7 @@ OcmDrawMenu (
       L"  %c %s%s",
       (Index == Selected) ? L'>' : L' ',
       Path,
-      (Index == DefaultIdx) ? L"   [default]" : L""
+      (Index == DefaultIdx) ? L"   [last]" : L""
       );
 
     if (Index == Selected) {
@@ -952,7 +1149,7 @@ OcmDrawMenu (
   }
 
   if (Seconds > 0) {
-    UnicodeSPrint (Line, sizeof (Line), L"  Booting default in %u s", (UINT32)Seconds);
+    UnicodeSPrint (Line, sizeof (Line), L"  Booting in %u s", (UINT32)Seconds);
     OcmPrintAt (8 + Count, Line);
   } else {
     OcmPrintAt (8 + Count, L"");
@@ -980,6 +1177,7 @@ OcmEditBootArgs (
   UINTN          Columns;
   UINTN          MaxLen;
   UINTN          Start;
+  INTN           CardY;
   EFI_INPUT_KEY  Key;
   BOOLEAN        Accepted;
 
@@ -989,17 +1187,34 @@ OcmEditBootArgs (
   OcmFlushKeys (32);
 
   if (mGfx) {
+    UINTN  Height;
+    INTN   FooterY;
+
+    Height = 324;
+    CardY  = (INTN)((1080 - Height) / 2);
+
     OcmGfxClear (OCMC_COLOR_BG);
-    OcmGfxFill (0, 0, 960, 68, OCMC_COLOR_PANEL);
-    OcmGfxFill (0, 66, 960, 2, OCMC_COLOR_ACCENT);
-    OcmGfxText (32, 18, L"BOOT ARGUMENTS", OCMC_COLOR_FG, 2);
-    OcmGfxTextRight (928, 26, L"THIS BOOT ONLY", OCMC_COLOR_DIM, 1);
-    OcmGfxText (32, 100, L"ENTER / ESC = SAVE      CTRL+Z = DISCARD", OCMC_COLOR_DIM, 1);
-    OcmGfxFill (32, 150, 4, 56, OCMC_COLOR_ACCENT);
-    OcmGfxFill (0, 470, 960, 1, OCMC_COLOR_LINE);
-    OcmGfxText (32, 482, L"APPLIES TO THIS BOOT ONLY", OCMC_COLOR_DIM, 1);
-    OcmGfxTextRight (928, 482, L"VOLATILE NVRAM", OCMC_COLOR_ACCENT, 1);
-    MaxLen = 100;
+    OcmGfxFill (OCM_CARD_X, CardY, OCM_CARD_W, (INTN)Height, OCMC_COLOR_PANEL);
+    OcmGfxFill (OCM_CARD_X, CardY, OCM_CARD_W, 3, OCMC_COLOR_ACCENT);
+    OcmGfxFill (OCM_CARD_X, CardY + 3, 1, (INTN)Height - 3, OCMC_COLOR_LINE);
+    OcmGfxFill (OCM_CARD_X + OCM_CARD_W - 1, CardY + 3, 1, (INTN)Height - 3, OCMC_COLOR_LINE);
+    OcmGfxFill (OCM_CARD_X, CardY + (INTN)Height - 1, OCM_CARD_W, 1, OCMC_COLOR_LINE);
+
+    OcmGfxText (OCM_CONTENT_X, CardY + 46, L"BOOT ARGUMENTS", OCMC_COLOR_FG, 2);
+    OcmGfxTextRight (OCM_CONTENT_X + OCM_CONTENT_W, CardY + 58, L"THIS BOOT ONLY", OCMC_COLOR_DIM, 1);
+    OcmGfxText (OCM_CONTENT_X, CardY + 96, L"ENTER / ESC = SAVE      CTRL+Z = DISCARD", OCMC_COLOR_DIM, 1);
+
+    OcmGfxFill (OCM_CONTENT_X, CardY + 128, OCM_CONTENT_W, 60, 0x080E14);
+    OcmGfxFill (OCM_CONTENT_X, CardY + 128, 3, 60, OCMC_COLOR_ACCENT);
+    OcmGfxFill (OCM_CONTENT_X, CardY + 128, OCM_CONTENT_W, 1, OCMC_COLOR_LINE);
+    OcmGfxFill (OCM_CONTENT_X, CardY + 187, OCM_CONTENT_W, 1, OCMC_COLOR_LINE);
+
+    FooterY = CardY + (INTN)Height - 64;
+    OcmGfxFill (OCM_CONTENT_X, FooterY, OCM_CONTENT_W, 1, OCMC_COLOR_LINE);
+    OcmGfxText (OCM_CONTENT_X, FooterY + 22, L"APPLIES TO THIS BOOT ONLY", OCMC_COLOR_DIM, 1);
+    OcmGfxTextRight (OCM_CONTENT_X + OCM_CONTENT_W, FooterY + 22, L"VOLATILE NVRAM", OCMC_COLOR_ACCENT, 1);
+
+    MaxLen = (OCM_CONTENT_W - 40) / 8;
   } else {
     gST->ConOut->SetAttribute (gST->ConOut, EFI_TEXT_ATTR (EFI_LIGHTGRAY, EFI_BLACK));
     gST->ConOut->ClearScreen (gST->ConOut);
@@ -1021,13 +1236,13 @@ OcmEditBootArgs (
         Start = Length + 1 - MaxLen;
       }
 
-      OcmGfxFill (36, 150, 888, 56, 0x0D151D);
+      OcmGfxFill (OCM_CONTENT_X + 6, CardY + 130, OCM_CONTENT_W - 10, 56, 0x080E14);
       UnicodeSPrint (Line, sizeof (Line), L"%c %s_", (Start > 0) ? L'<' : L'>', Args + Start);
-      OcmGfxText (52, 170, Line, OCMC_COLOR_FG, 1);
+      OcmGfxText (OCM_CONTENT_X + 20, CardY + 146, Line, OCMC_COLOR_FG, 1);
 
-      OcmGfxFill (32, 214, 280, 16, OCMC_COLOR_BG);
+      OcmGfxFill (OCM_CONTENT_X, CardY + 208, 260, 20, OCMC_COLOR_PANEL);
       UnicodeSPrint (Line, sizeof (Line), L"LEN %u", (UINT32)Length);
-      OcmGfxText (48, 214, Line, OCMC_COLOR_DIM, 1);
+      OcmGfxText (OCM_CONTENT_X, CardY + 212, Line, OCMC_COLOR_DIM, 1);
     } else {
       Columns = OcmGetColumns ();
       MaxLen  = (Columns > 10) ? (Columns - 6) : 40;
@@ -1105,6 +1320,7 @@ OcConfigMenuSelect (
   CHAR16         DefaultName[OCMC_NAME_LEN];
   CHAR16         Message[160];
   CHAR8          Trace[160];
+  CHAR8          NameAscii[OCMC_NAME_LEN];
   UINTN          Count;
   UINTN          DefaultIdx;
   UINTN          Selected;
@@ -1154,6 +1370,12 @@ OcConfigMenuSelect (
     //
     if (EFI_ERROR (OcmReadKey (&Key, OCMC_QUIET_POLL_MS)) || (Key.ScanCode != SCAN_ESC)) {
       OcmBuildPath (Names[DefaultIdx], mConfigPath);
+      if (!OcmValidateConfig (Storage, mConfigPath)) {
+        OcmTrace (Storage, "quiet: remembered config unreadable, using entry 1");
+        DefaultIdx = 0;
+        OcmBuildPath (Names[DefaultIdx], mConfigPath);
+      }
+
       mChosenIndex = DefaultIdx;
       mChosenValid = TRUE;
       return mConfigPath;
@@ -1180,7 +1402,17 @@ OcConfigMenuSelect (
           --Seconds;
           OcmDrawMenu (Names, Count, Selected, DefaultIdx, Seconds, NULL);
           if (Seconds == 0) {
+            //
+            // Boot the remembered entry, but never let a stale memory point at
+            // a configuration that can no longer be read or parsed.
+            //
             OcmBuildPath (Names[Selected], mConfigPath);
+            if (!OcmValidateConfig (Storage, mConfigPath)) {
+              OcmTrace (Storage, "auto-boot: remembered config unreadable, using entry 1");
+              Selected = 0;
+              OcmBuildPath (Names[Selected], mConfigPath);
+            }
+
             break;
           }
         }
@@ -1277,6 +1509,17 @@ OcConfigMenuSelect (
 
   mChosenIndex = Selected;
   mChosenValid = TRUE;
+
+  //
+  // Remember the selection so that the next boot starts from the same entry.
+  // Skipped when it already matches the stored one, to spare the NVRAM cell.
+  //
+  if (StrCmp (Names[Selected], DefaultName) != 0) {
+    Status = OcmSaveDefaultName (Names[Selected]);
+    UnicodeStrToAsciiStrS (Names[Selected], NameAscii, sizeof (NameAscii));
+    AsciiSPrint (Trace, sizeof (Trace), "remember: %a - %r", NameAscii, Status);
+    OcmTrace (Storage, Trace);
+  }
 
   if (gST->ConOut != NULL) {
     gST->ConOut->SetAttribute (gST->ConOut, EFI_TEXT_ATTR (EFI_LIGHTGRAY, EFI_BLACK));
