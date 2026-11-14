@@ -45,7 +45,7 @@
 #define OCMC_KEY_POLL_MS    250
 #define OCMC_ROOT_NAME      L"config"
 #define OCMC_DEFAULT_VAR    L"OC-ConfigDefault"
-#define OCMC_BUILD_TAG      L"mc7"
+#define OCMC_BUILD_TAG      L"mc9"
 
 ///
 /// Esc as delivered by firmware that reports no scan code, only the
@@ -1182,13 +1182,17 @@ OcmEditBootArgs (
   UINTN          Length;
   UINTN          Columns;
   UINTN          MaxLen;
+  UINTN          Cursor;
   UINTN          Start;
+  CHAR16         Dbg[48];
   INTN           CardY;
   EFI_INPUT_KEY  Key;
   BOOLEAN        Accepted;
 
   Length   = StrLen (Args);
+  Cursor   = Length;
   Accepted = FALSE;
+  Dbg[0]   = L'\0';
 
   OcmFlushKeys (32);
 
@@ -1238,33 +1242,141 @@ OcmEditBootArgs (
     //
     if (mGfx) {
       Start = 0;
-      if (Length + 1 > MaxLen) {
-        Start = Length + 1 - MaxLen;
+      if (Length > MaxLen) {
+        if (Cursor + 1 > MaxLen) {
+          Start = Cursor + 1 - MaxLen;
+        }
+        if (Start > Length - MaxLen) {
+          Start = Length - MaxLen;
+        }
+        if ((INTN)Start < 0) {
+          Start = 0;
+        }
+      }
+
+      //
+      // Visible line. The caret is a solid block drawn over the character at the
+      // cursor, with that character redrawn in the field colour so it stays
+      // legible -- a thin underscore read as "covering" the letter and was hard
+      // to spot when it moved.
+      //
+      {
+        UINTN Di;
+        UINTN Si;
+        UINTN Idx;
+        Di = 0;
+        Line[Di++] = (Start > 0) ? L'<' : L' ';
+        for (Si = 0; Si < MaxLen - 1; ++Si) {
+          Idx = Start + Si;
+          if (Idx >= Length) {
+            break;
+          }
+          Line[Di++] = Args[Idx];
+        }
+        Line[Di] = L'\0';
       }
 
       OcmGfxFill (OCM_CONTENT_X + 6, CardY + 130, OCM_CONTENT_W - 10, 56, 0x080E14);
-      UnicodeSPrint (Line, sizeof (Line), L"%c %s_", (Start > 0) ? L'<' : L'>', Args + Start);
       OcmGfxText (OCM_CONTENT_X + 20, CardY + 146, Line, OCMC_COLOR_FG, 1);
+
+      {
+        INTN   CellW;
+        INTN   Prefix;
+        INTN   Cell;
+        INTN   Cx;
+        INTN   Cy;
+        CHAR16 CurCh[2];
+
+        CellW  = (INTN)OcmGfxTextWidth (L"A", 1);
+        Prefix = (Start > 0) ? 1 : 0;
+        Cell   = (INTN)(Cursor - Start) + Prefix;
+        if (Cell < 0) {
+          Cell = 0;
+        }
+        if (Cell > (INTN)(MaxLen - 1)) {
+          Cell = (INTN)(MaxLen - 1);
+        }
+
+        Cx = OCM_CONTENT_X + 20 + Cell * CellW;
+        Cy = CardY + 146;
+
+        OcmGfxFill (Cx, Cy - 2, CellW, 20, OCMC_COLOR_ACCENT);
+        CurCh[0] = (Cursor < Length) ? Args[Cursor] : L' ';
+        CurCh[1] = L'\0';
+        OcmGfxText (Cx, Cy, CurCh, 0x080E14, 1);
+      }
 
       OcmGfxFill (OCM_CONTENT_X, CardY + 208, 260, 20, OCMC_COLOR_PANEL);
       UnicodeSPrint (Line, sizeof (Line), L"LEN %u", (UINT32)Length);
       OcmGfxText (OCM_CONTENT_X, CardY + 212, Line, OCMC_COLOR_DIM, 1);
+
+      if (mTraceEnabled) {
+        OcmGfxFill (OCM_CONTENT_X, CardY + 236, OCM_CONTENT_W, 20, OCMC_COLOR_PANEL);
+        OcmGfxText (OCM_CONTENT_X, CardY + 240, Dbg, OCMC_COLOR_ACCENT, 1);
+      }
     } else {
       Columns = OcmGetColumns ();
       MaxLen  = (Columns > 10) ? (Columns - 6) : 40;
       Start   = 0;
-      if (Length + 1 > MaxLen) {
-        Start = Length + 1 - MaxLen;
+      if (Length > MaxLen) {
+        if (Cursor + 1 > MaxLen) {
+          Start = Cursor + 1 - MaxLen;
+        }
+        if (Start > Length - MaxLen) {
+          Start = Length - MaxLen;
+        }
+        if ((INTN)Start < 0) {
+          Start = 0;
+        }
       }
 
-      UnicodeSPrint (Line, sizeof (Line), L"  %c %s_", (Start > 0) ? L'<' : L'>', Args + Start);
+      {
+        UINTN Di;
+        UINTN Si;
+        UINTN Idx;
+        Di = 0;
+        Line[Di++] = (Start > 0) ? L'<' : L' ';
+        for (Si = 0; Si < MaxLen - 1; ++Si) {
+          Idx = Start + Si;
+          if (Idx >= Length) {
+            break;
+          }
+          if (Idx == Cursor) {
+            Line[Di++] = L'_';
+          }
+          Line[Di++] = Args[Idx];
+        }
+        if (Cursor >= Length) {
+          Line[Di++] = L'_';
+        }
+        Line[Di] = L'\0';
+      }
+
       gST->ConOut->SetAttribute (gST->ConOut, EFI_TEXT_ATTR (EFI_BLACK, EFI_LIGHTGRAY));
       OcmPrintAt (4, Line);
       gST->ConOut->SetAttribute (gST->ConOut, EFI_TEXT_ATTR (EFI_LIGHTGRAY, EFI_BLACK));
+
+      if (mTraceEnabled) {
+        gST->ConOut->SetAttribute (gST->ConOut, EFI_TEXT_ATTR (EFI_RED, EFI_BLACK));
+        OcmPrintAt (6, Dbg);
+        gST->ConOut->SetAttribute (gST->ConOut, EFI_TEXT_ATTR (EFI_LIGHTGRAY, EFI_BLACK));
+      }
     }
 
     if (EFI_ERROR (OcmReadKey (&Key, 30000))) {
       continue;
+    }
+
+    if (mTraceEnabled) {
+      UnicodeSPrint (
+        Dbg,
+        sizeof (Dbg),
+        L"scan=%02X char=%04X cur=%u len=%u",
+        (UINT32)Key.ScanCode,
+        (UINT32)Key.UnicodeChar,
+        (UINT32)Cursor,
+        (UINT32)Length
+        );
     }
 
     if (Key.UnicodeChar == 0x1A) {
@@ -1286,12 +1398,50 @@ OcmEditBootArgs (
       break;
     }
 
-    if ((Key.UnicodeChar == CHAR_BACKSPACE) || (Key.UnicodeChar == 0x7F)) {
-      if (Length > 0) {
-        --Length;
-        Args[Length] = L'\0';
+    if (Key.ScanCode == SCAN_LEFT) {
+      if (Cursor > 0) {
+        --Cursor;
       }
+      continue;
+    }
 
+    if (Key.ScanCode == SCAN_RIGHT) {
+      if (Cursor < Length) {
+        ++Cursor;
+      }
+      continue;
+    }
+
+    if (Key.ScanCode == SCAN_HOME) {
+      Cursor = 0;
+      continue;
+    }
+
+    if (Key.ScanCode == SCAN_END) {
+      Cursor = Length;
+      continue;
+    }
+
+    if ((Key.UnicodeChar == CHAR_BACKSPACE) || (Key.UnicodeChar == 0x7F)) {
+      if (Cursor > 0) {
+        UINTN Mi;
+        for (Mi = Cursor - 1; Mi < Length; ++Mi) {
+          Args[Mi] = Args[Mi + 1];
+        }
+        --Length;
+        --Cursor;
+      }
+      continue;
+    }
+
+    if (Key.ScanCode == SCAN_DELETE) {
+      if (Cursor < Length) {
+        UINTN Mi;
+        for (Mi = Cursor; Mi < Length; ++Mi) {
+          Args[Mi] = Args[Mi + 1];
+        }
+        --Length;
+      }
       continue;
     }
 
@@ -1303,9 +1453,16 @@ OcmEditBootArgs (
       continue;
     }
 
-    Args[Length] = Key.UnicodeChar;
-    ++Length;
-    Args[Length] = L'\0';
+    {
+      UINTN Mi;
+      for (Mi = Length + 1; Mi > Cursor; --Mi) {
+        Args[Mi] = Args[Mi - 1];
+      }
+      Args[Cursor] = Key.UnicodeChar;
+      ++Length;
+      ++Cursor;
+      Args[Length] = L'\0';
+    }
   }
 
   gST->ConOut->SetAttribute (gST->ConOut, EFI_TEXT_ATTR (EFI_LIGHTGRAY, EFI_BLACK));
@@ -1483,6 +1640,12 @@ OcConfigMenuSelect (
         OcmTrace (Storage, "edit cancelled");
       }
 
+      //
+      // The editor painted its own card over the menu. Force a full repaint
+      // instead of an incremental one, or the stale editor frame stays on
+      // screen and it looks like Esc did nothing.
+      //
+      mCardDrawn = FALSE;
       OcmDrawMenu (Names, Count, Selected, DefaultIdx, 0, Message);
       continue;
     }
