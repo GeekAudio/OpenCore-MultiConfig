@@ -45,7 +45,7 @@
 #define OCMC_KEY_POLL_MS    250
 #define OCMC_ROOT_NAME      L"config"
 #define OCMC_DEFAULT_VAR    L"OC-ConfigDefault"
-#define OCMC_BUILD_TAG      L"mc11"
+#define OCMC_BUILD_TAG      L"mc13"
 
 ///
 /// Esc as delivered by firmware that reports no scan code, only the
@@ -310,6 +310,82 @@ OcmInsertName (
 }
 
 /**
+  Forward declaration: verify that a configuration file exists and can be
+  parsed. Defined below, needed by OcmListConfigs to filter at scan time.
+
+  @param[in] Storage   Storage context of EFI/OC.
+  @param[in] Path      Path relative to EFI/OC.
+
+  @retval TRUE  The file is loadable by OpenCore.
+**/
+STATIC
+BOOLEAN
+OcmValidateConfig (
+  IN OC_STORAGE_CONTEXT  *Storage,
+  IN CONST CHAR16        *Path
+  );
+
+/**
+  Lightweight scan-time screen for Configs/ entries.
+
+  Deliberately lax: a config is offered in the menu as long as it is readable,
+  non-empty, and not a binary plist.  Full parsing is NOT done here -- a config
+  missing fields for this OpenCore build, or carrying newer fields, must still
+  show up so the user can pick it.  Only the two cases OpenCore can never load
+  are rejected up front:
+
+    - empty / unreadable files
+    - binary plists (magic "bplist00"); OpenCore's parser is XML-only.
+
+  A rejected file is logged when .trace is present.  Real validity is still
+  checked with OcmValidateConfig at the moment of boot, so a bad file reaching
+  this menu never gets force-fed to OpenCore.
+
+  @param[in] Storage   Storage context of EFI/OC.
+  @param[in] Path      Path relative to EFI/OC.
+
+  @retval TRUE  Worth offering in the menu.
+**/
+STATIC
+BOOLEAN
+OcmLooksLoadable (
+  IN OC_STORAGE_CONTEXT  *Storage,
+  IN CONST CHAR16        *Path
+  )
+{
+  CHAR8         *Data;
+  UINT32         Size;
+  UINTN          Index;
+  BOOLEAN        IsBinary;
+  CONST CHAR8    BinaryMagic[8] = {
+    'b', 'p', 'l', 'i', 's', 't', '0', '0'
+  };
+
+  Data = OcStorageReadFileUnicode (Storage, Path, &Size);
+  if ((Data == NULL) || (Size == 0)) {
+    if (Data != NULL) {
+      FreePool (Data);
+    }
+
+    return FALSE;
+  }
+
+  IsBinary = FALSE;
+  if (Size >= sizeof (BinaryMagic)) {
+    IsBinary = TRUE;
+    for (Index = 0; Index < sizeof (BinaryMagic); ++Index) {
+      if (Data[Index] != BinaryMagic[Index]) {
+        IsBinary = FALSE;
+        break;
+      }
+    }
+  }
+
+  FreePool (Data);
+  return (BOOLEAN)!IsBinary;
+}
+
+/**
   Enumerate configuration files.
 
   Entry zero is always the stock configuration file in EFI/OC, the remaining
@@ -336,6 +412,9 @@ OcmListConfigs (
   UINTN             InfoSize;
   UINTN             BufferSize;
   UINTN             NameLen;
+  CHAR16            Path[OCMC_PATH_LEN];
+  CHAR8             NameAscii[OCMC_NAME_LEN];
+  CHAR8             TraceLine[128];
 
   *Count = 0;
 
@@ -389,6 +468,27 @@ OcmListConfigs (
     }
 
     if (!OcmIsConfigName (Info->FileName)) {
+      continue;
+    }
+
+    //
+    // Lax screen at scan time: only skip files OpenCore could never load at
+    // all (empty or binary plist).  Everything else -- including configs that
+    // are incomplete for this OpenCore build or use newer fields -- reaches
+    // the menu, and full validation is deferred to the moment of boot.
+    // Skipped files are logged when .trace is present.
+    //
+    UnicodeSPrint (
+      Path,
+      sizeof (Path),
+      L"%s\\%s",
+      OCMC_CONFIG_DIR,
+      Info->FileName
+      );
+    if (!OcmLooksLoadable (Storage, Path)) {
+      UnicodeStrToAsciiStrS (Info->FileName, NameAscii, sizeof (NameAscii));
+      AsciiSPrint (TraceLine, sizeof (TraceLine), "skip unloadable config: %a", NameAscii);
+      OcmTrace (Storage, TraceLine);
       continue;
     }
 
@@ -1511,6 +1611,13 @@ OcConfigMenuSelect (
     return mConfigPath;
   }
 
+  //
+  // Enable tracing before enumeration so the config filter can log which
+  // files it rejected.
+  //
+  mTraceEnabled = OcStorageExistsFileUnicode (Storage, OCMC_TRACE_MARKER);
+  mStorage      = Storage;
+
   Status = OcmListConfigs (Storage, Names, &Count);
   if (EFI_ERROR (Status) || (Count <= 1)) {
     //
@@ -1519,8 +1626,6 @@ OcConfigMenuSelect (
     return mConfigPath;
   }
 
-  mTraceEnabled = OcStorageExistsFileUnicode (Storage, OCMC_TRACE_MARKER);
-  mStorage      = Storage;
   AsciiSPrint (Trace, sizeof (Trace), "menu start, entries=%u", (UINT32)Count);
   OcmTrace (Storage, Trace);
 

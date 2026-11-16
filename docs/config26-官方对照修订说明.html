@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>config26 · 对照 OpenCore 官方说明修订记录</title>
+<style>
+  :root{
+    --ink:#1b2430; --ink2:#4a5766; --dim:#7c8899; --line:#dfe4ea;
+    --bg:#f7f8fa; --card:#ffffff; --soft:#f1f4f8;
+    --accent:#0f6e56; --accent-soft:#e1f5ee;
+    --warn:#a2531a; --warn-soft:#faeeda;
+    --bad:#a32d2d; --bad-soft:#fcebeb;
+    --info:#185fa5; --info-soft:#e6f1fb;
+    --rust:#9a4b2a;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:15px; line-height:1.75; -webkit-font-smoothing:antialiased}
+  h1,h2,h3,.serif{font-family:"Songti SC","STSong","Noto Serif CJK SC",Georgia,serif}
+  a{color:var(--info); text-decoration:none}
+  a:hover{text-decoration:underline}
+  code,.mono{font-family:"SF Mono",Menlo,Consolas,monospace; font-size:.88em;
+    background:var(--soft); padding:1px 5px; border-radius:4px; color:#334; white-space:normal; word-break:break-all}
+  .rail{position:fixed; left:0; top:0; bottom:0; width:218px; background:var(--card);
+    border-right:1px solid var(--line); padding:26px 18px; overflow-y:auto; z-index:5}
+  .rail .brand{font-size:13px; letter-spacing:.08em; color:var(--dim); text-transform:uppercase; margin-bottom:4px}
+  .rail .ttl{font-size:19px; line-height:1.4; margin:0 0 20px; font-weight:600}
+  .rail a{display:block; padding:6px 9px; margin:1px 0; border-radius:6px; color:var(--ink2); font-size:13.5px}
+  .rail a:hover{background:var(--soft); text-decoration:none; color:var(--ink)}
+  .rail .sep{height:1px; background:var(--line); margin:14px 0}
+  .rail .foot{font-size:12px; color:var(--dim); line-height:1.6; margin-top:18px}
+  .main{margin-left:218px; padding:0 0 90px}
+  .wrap{max-width:980px; margin:0 auto; padding:0 38px}
+  .mast{padding:52px 0 30px; border-bottom:1px solid var(--line); margin-bottom:36px}
+  .mast .kicker{color:var(--rust); font-size:13px; letter-spacing:.14em; margin-bottom:12px}
+  .mast h1{font-size:35px; line-height:1.3; margin:0 0 12px; font-weight:600}
+  .mast .sub{color:var(--ink2); font-size:16px; margin:0}
+  .mast .meta{color:var(--dim); font-size:13px; margin-top:16px}
+  section{margin:0 0 50px; scroll-margin-top:20px}
+  .num{display:inline-block; font-family:"SF Mono",Menlo,monospace; font-size:12px;
+    color:var(--accent); background:var(--accent-soft); padding:2px 8px; border-radius:5px; margin-bottom:10px}
+  h2{font-size:24px; margin:0 0 10px; font-weight:600}
+  h3{font-size:18px; margin:24px 0 10px; font-weight:600}
+  p{margin:0 0 12px}
+  ul,ol{margin:0 0 14px; padding-left:22px}
+  li{margin:5px 0}
+  .lead{font-size:16.5px; color:var(--ink2)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px 24px; margin:16px 0}
+  .callout{border-left:4px solid var(--info); background:var(--info-soft); padding:14px 18px;
+    border-radius:0 8px 8px 0; margin:16px 0; font-size:14.5px}
+  .callout.warn{border-color:var(--warn); background:var(--warn-soft)}
+  .callout.ok{border-color:var(--accent); background:var(--accent-soft)}
+  .callout.bad{border-color:var(--bad); background:var(--bad-soft)}
+  .callout p:last-child{margin-bottom:0}
+  table{width:100%; border-collapse:collapse; margin:14px 0 20px; font-size:14px; background:var(--card);
+    border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th,td{padding:10px 12px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top}
+  th{background:var(--soft); font-weight:600; font-size:13px; color:var(--ink2)}
+  tr:last-child td{border-bottom:none}
+  .tight td,.tight th{padding:8px 10px}
+  .kpi{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; margin:20px 0}
+  .kpi .box{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 18px}
+  .kpi .v{font-size:26px; font-weight:600; color:var(--accent); line-height:1.2}
+  .kpi .l{font-size:13px; color:var(--dim); margin-top:4px}
+  .qt{background:var(--card); border:1px solid var(--line); border-left:4px solid var(--rust);
+    border-radius:0 10px 10px 0; padding:15px 18px; margin:14px 0}
+  .qt .qm{font-size:12.5px; color:var(--dim); margin-bottom:8px}
+  .qt .en{font-family:"SF Mono",Menlo,Consolas,monospace; font-size:12.8px; line-height:1.65;
+    color:#334; background:var(--soft); padding:10px 12px; border-radius:6px; margin-bottom:8px}
+  .qt .zh{font-size:14px; color:var(--ink2); margin:0}
+  .tag{display:inline-block; font-size:12px; padding:1px 8px; border-radius:20px; font-weight:600; white-space:nowrap}
+  .t-on{background:var(--accent-soft); color:var(--accent)}
+  .t-off{background:#f0f1f3; color:#77808c}
+  .t-warn{background:var(--warn-soft); color:var(--warn)}
+  footer{border-top:1px solid var(--line); margin-top:20px; padding-top:20px; font-size:13px; color:var(--dim)}
+</style>
+</head>
+<body>
+<nav class="rail">
+  <div class="brand">OCMC · 配置审查</div>
+  <div class="ttl">config26<br>官方对照修订</div>
+  <a href="#s0">00 速览</a>
+  <a href="#s1">01 校验口径</a>
+  <a href="#s2">02 改动明细</a>
+  <a href="#s3">03 一处更正</a>
+  <a href="#s4">04 内存映射组</a>
+  <a href="#s5">05 保留项判定</a>
+  <a href="#s6">06 目录卫生与回退</a>
+  <a href="#s7">07 口径说明</a>
+  <div class="sep"></div>
+  <div class="foot">OpenCore 1.0.8<br>依据：官方源码树内文档与校验器<br>11-15 05:34（导出端本地时间）</div>
+</nav>
+
+<div class="main"><div class="wrap">
+
+<header class="mast">
+  <div class="kicker">CONFIGURATION REVIEW / 1.0.8</div>
+  <h1>config26 · 对照官方说明修订</h1>
+  <p class="sub">用 OpenCore 自己的校验器、默认模板与文档源码逐条核对，只改有明确官方依据的项</p>
+  <p class="meta">对象：<code>/Volumes/EFI/EFI/OC/Configs/config26.plist</code>　·　机型 <code>iMac20,2</code>　·　与 config27（根目录 config.plist）独立对照</p>
+</header>
+
+<section id="s0">
+  <div class="num">00</div><h2>速览</h2>
+  <p class="lead">结论比预想的干净：<b>这份配置本来就合规</b>。官方校验器零错误，与默认模板的 79 项差异绝大多数是这台硬件的必要补丁，且彼此耦合自洽。真正按官方说明该改的只有 2 类、共 3 处。</p>
+  <div class="kpi">
+    <div class="box"><div class="v">0</div><div class="l">ocvalidate 报错（改前 / 改后）</div></div>
+    <div class="box"><div class="v">79</div><div class="l">与官方默认不同的标量项</div></div>
+    <div class="box"><div class="v">3</div><div class="l">实际改动（2 类）</div></div>
+    <div class="box"><div class="v">0</div><div class="l">缺失的 ACPI / kext / 驱动素材</div></div>
+  </div>
+  <div class="callout ok"><p><b>改动后复验</b>：<code>ocvalidate</code> → <code>No issues found</code>；<code>plutil -lint</code> → <code>OK</code>；语义 diff 恰好 3 处，无附带变化。文件 42,482 B → 42,820 B，SHA <code>f842589d52d0</code> → <code>cec900048694</code>。</p></div>
+</section>
+
+<section id="s1">
+  <div class="num">01</div><h2>校验口径</h2>
+  <p>全部依据来自本地 OpenCore 1.0.8 源码树，未联网、未引用第三方教程：</p>
+  <table>
+    <tr><th>依据</th><th>位置</th><th>用途</th></tr>
+    <tr><td>官方校验器</td><td><code>Utilities/ocvalidate/ocvalidate</code>（x86_64 + arm64 通用二进制）</td><td>结构、字段、取值合法性</td></tr>
+    <tr><td>官方默认模板</td><td><code>Docs/Sample.plist</code></td><td>逐项默认值对照</td></tr>
+    <tr><td>官方文档源码</td><td><code>Docs/Configuration.tex</code>（481 KB 纯文本 LaTeX）</td><td>语义、适用条件、耦合关系；行号可直接定位</td></tr>
+  </table>
+  <p>结构与素材检查结果：</p>
+  <ul>
+    <li>字段类型不符 <b>0</b>；数组条目模板字段齐全（ACPI.Add 13 条、Kernel.Add 21 条、UEFI.Drivers 4 条、ACPI.Delete 1 条、ACPI.Patch 3 条、Kernel.Patch 1 条）。</li>
+    <li>路径有效性：<b>13 个 AML、21 个 kext、4 个 UEFI 驱动全部真实存在</b>，无缺失。此项 <code>ocvalidate</code> 不检查，但实际启动会失败，所以单独扫了一遍。</li>
+    <li>官方模板中 <code>Booter.MmioWhitelist</code> / <code>Booter.Patch</code> / <code>UEFI.ReservedMemory</code> / <code>Misc.Entries</code> 带示例条目，config26 对应为空数组——属于正常省略，文档明确写「可移除」，不补。</li>
+  </ul>
+  <div class="callout warn"><p><b>为什么要再读文档</b>：<code>ocvalidate</code> 只判断「合不合法」，不判断「该不该开」。<code>XhciPortLimit=True</code> 完全合法，却是官方明确写着「应尽可能避免」的项——这类只能靠读 <code>Configuration.tex</code> 找出来。</p></div>
+</section>
+
+<section id="s2">
+  <div class="num">02</div><h2>改动明细</h2>
+  <table class="tight">
+    <tr><th>路径</th><th>原值</th><th>新值</th><th>官方依据</th></tr>
+    <tr><td><code>Kernel.Quirks.XhciPortLimit</code></td><td><span class="tag t-warn">True</span></td><td><span class="tag t-on">False</span></td><td>Configuration.tex:2991</td></tr>
+    <tr><td><code>PlatformInfo.Memory.Devices[1].Speed</code></td><td>3600</td><td><b>2666</b></td><td>Configuration.tex:6187</td></tr>
+    <tr><td><code>PlatformInfo.Memory.Devices[3].Speed</code></td><td>3600</td><td><b>2666</b></td><td>Configuration.tex:6187</td></tr>
+  </table>
+
+  <h3>改动 1 · 关掉 USB 端口数补丁</h3>
+  <div class="qt">
+    <div class="qm">Configuration.tex:2991 · XhciPortLimit</div>
+    <div class="en">"This option should be avoided whenever possible. USB port limit is imposed by the amount of used bits in locationID format and there is no possible way to workaround this without heavy OS modification. The only valid solution is to limit the amount of used ports to 15 (discarding some)."</div>
+    <p class="zh">官方口径：尽可能避免开启；15 端口上限由 locationID 的位数决定，不改动系统无法绕过；<b>唯一有效解法是把实际端口裁剪到 15 个以内</b>。</p>
+  </div>
+  <p>当前配置已启用 <code>USBToolBox.kext</code> + <code>UTBMap.kext</code> + <code>XHCI-unsupported.kext</code>，正是官方推荐的端口定制方案。既然端口已经裁好，这个补丁既冗余、在现代 macOS 上也不再生效，关闭它不会减少任何可用端口。</p>
+
+  <h3>改动 2 · 内存速率与模块型号对齐</h3>
+  <div class="qt">
+    <div class="qm">Configuration.tex:6187 · Speed ／ :5971 · Devices</div>
+    <div class="en">"Specifies the maximum capable speed of the device, in megatransfers per second (MT/s). 0 indicates an unknown speed."<br>"This should include all memory slots, even if unpopulated."</div>
+    <p class="zh">Speed 是模块<b>最大能力速率</b>（MT/s）；Devices 要列出<b>全部插槽，含空槽</b>。</p>
+  </div>
+  <p>两条已插内存的 <code>PartNumber</code> 均为 <code>KHX2666C16/16G</code>（DDR4-2666、CL16、16 GB），额定 2666 MT/s，原填 3600 与型号不符。其余内存字段复核后全部合法：4 个插槽含 2 个 <code>NO DIMM</code> 空槽 ✓、<code>MaxCapacity=137438953472</code>（官方单位 bytes，即 128 GB）✓、<code>FormFactor=9</code> DIMM ✓、<code>Type=26</code> DDR4 ✓、<code>ErrorCorrection=3</code> None ✓、<code>DataWidth=TotalWidth=64</code>（无 ECC）✓。</p>
+  <div class="callout"><p>此项<b>零启动风险</b>，只影响「关于本机」的内存速率显示。如果实际开启 XMP 让内存跑在 3600，把这两处改回 3600 即可。</p></div>
+</section>
+
+<section id="s3">
+  <div class="num">03</div><h2>一处更正：AllowRelocationBlock 不该关</h2>
+  <p>上一份《Booter 内存映射组指南》把 <code>AllowRelocationBlock=开</code> 列为「唯一值得复查项」，措辞偏强。把官方原文读完后需要更正：</p>
+  <div class="qt">
+    <div class="qm">Configuration.tex:1477 · AllowRelocationBlock（末句）</div>
+    <div class="en">"Hibernation is not supported when booting with a relocation block, which will only be used if required when the quirk is enabled."</div>
+    <p class="zh">即使启用该 quirk，relocation block 也<b>只在确实需要时才会被使用</b>；「不支持休眠」只在实际用到它时才成立。</p>
+  </div>
+  <p>官方列出的三个适用条件（无可用 slide、强制 <code>slide=0</code>、KASLR 不支持即 10.7 或更早）在当前配置下确实都不满足，但启用它只是提供一个兜底，不是常驻风险；关掉反而会在低位内存被占用时失去退路。因此<b>保留 True，本次不改</b>。</p>
+  <div class="callout ok"><p>这条也说明了一件事：官方说明里「适用条件不满足」与「必须关闭」不是一回事，逐条判定不能只看前半句。</p></div>
+</section>
+
+<section id="s4">
+  <div class="num">04</div><h2>内存映射组：核对后无需改动</h2>
+  <p>22 项 Booter Quirks 与官方默认、以及 config27（能启动的那份）<b>逐项完全一致</b>，6 项非默认值都是自洽的现代组合：</p>
+  <table class="tight">
+    <tr><th>Quirk</th><th>官方默认</th><th>当前值</th><th>判定</th></tr>
+    <tr><td><code>RebuildAppleMemoryMap</code></td><td>False</td><td><b>True</b></td><td>官方 :1621「固件支持 MAT 时请改用 Rebuild」→ 正确</td></tr>
+    <tr><td><code>EnableWriteUnprotector</code></td><td>True</td><td><b>False</b></td><td>与上一项互斥，二选一已选对</td></tr>
+    <tr><td><code>SyncRuntimePermissions</code></td><td>False</td><td><b>True</b></td><td>官方 :1901，2017 后固件常见需求</td></tr>
+    <tr><td><code>ProtectUefiServices</code></td><td>False</td><td><b>True</b></td><td>官方 :1743，主要面向 VMware / GRUB 链式；此处属增益保护</td></tr>
+    <tr><td><code>ResizeAppleGpuBars</code></td><td>-1</td><td><b>0</b></td><td>官方 :1843「唯一支持的值就是 0」→ 正确</td></tr>
+    <tr><td><code>AllowRelocationBlock</code></td><td>False</td><td><b>True</b></td><td>按需启用的兜底，见第 03 节</td></tr>
+  </table>
+  <p>其余 16 项与官方默认一致；<code>SetupVirtualMap=True</code> 也是官方默认值。此外 <code>SecureBootModel=Disabled</code> 与 <code>FixupAppleEfiImages=True</code> 成对、<code>UEFI.ResizeGpuBars=-1</code> 与 Booter 侧缩小 BAR 分工明确，均无冲突。</p>
+  <div class="callout warn"><p>官方在 Troubleshooting 里明确写过：<code>RebuildAppleMemoryMap</code>、<code>EnableWriteUnprotector</code>、<code>ProtectMemoryRegions</code>、<code>SetupVirtualMap</code>、<code>SyncRuntimePermissions</code> 这 5 项<b>即使在相似硬件上也没有确定取值方法，可能要试遍所有组合</b>。所以本次对照没有擅动这一组——它属于「启动结果反馈」才能定值的类别，不是查表能改的。</p></div>
+</section>
+
+<section id="s5">
+  <div class="num">05</div><h2>其余 76 项为什么保留</h2>
+  <p>与官方默认不同的 79 项里，去掉上面 3 处改动，剩下按四类判定，均不属违规：</p>
+  <table>
+    <tr><th>类别</th><th>代表项</th><th>官方依据 / 保留理由</th></tr>
+    <tr><td><b>硬件必需补丁</b></td><td><code>ProvideCurrentCpuInfo</code>、<code>DisableIoMapper</code>、<code>Cpuid1Data/Mask</code>、<code>ResizeAppleGpuBars=0</code></td><td>:2902 明确 Alder Lake 非对称 SMP 需要 ProvideCurrentCpuInfo；:2732 DisableIoMapper 优于删 DMAR 表；CPUID 伪装与 GPU BAR 缩小由硬件决定</td></tr>
+    <tr><td><b>官方耦合一致</b></td><td><code>UpdateSMBIOSMode=Custom</code> ↔ <code>CustomSMBIOSGuid=True</code>；<code>LauncherOption=Full</code> ↔ <code>RequestBootVarRouting=True</code>；<code>PickerMode=External</code> ↔ <code>OpenCanopy.efi</code>；<code>CustomMemory=True</code> ↔ <code>UpdateSMBIOS=True</code></td><td>:5583 / :2724 / :3535 / :5503 分别写明前置条件，逐对核对全部满足</td></tr>
+    <tr><td><b>调试与偏好</b></td><td><code>AppleDebug</code>、<code>ApplePanic</code>、<code>DisableWatchDog</code>、<code>Target=64</code>、boot-args 中的 <code>-v</code> / <code>debug=0x100</code> / <code>-liludbg</code>；<code>ScanPolicy=0</code>、<code>Vault=Optional</code>、<code>ExposeSensitiveData=7</code></td><td>官方只描述功能、不禁止；显卡驱动仍在调试，日志与 panic 保存是刚需。<b>Vault 不能随手改</b>：改成 Basic/Secure 必须先生成 vault.plist / vault.sig，否则直接无法启动</td></tr>
+    <tr><td><b>用户素材</b></td><td><code>iMac20,2</code>、序列号 / MLB / UUID、DeviceProperties、13 个 AML、21 个 kext、4 个驱动、boot-args</td><td>官方不规定取值，由实际硬件与所装系统决定</td></tr>
+  </table>
+  <p>另外 <code>UEFI.Output.IgnoreTextInGraphics=True</code> 与 <code>TextRenderer=SystemGraphics</code> 也自洽——官方 :8749 注明该选项仅对 System 渲染器生效。</p>
+</section>
+
+<section id="s6">
+  <div class="num">06</div><h2>目录卫生与回退</h2>
+  <p>顺带清理了 ESP 上的 macOS AppleDouble 元数据垃圾（各 4096 B，不含任何配置数据）。<b>先完整归档到 <code>/tmp/efi-junk-archive-20261115-053537</code> 并校验，再删除</b>，全树复扫 0 残留：</p>
+  <ul>
+    <li><code>EFI/OC/._config.plist</code>、<code>EFI/OC/Drivers/._OpenRuntime.efi</code>、<code>EFI/OC/Drivers/._OpenHfsPlus.efi</code>、<code>EFI/OC/Configs/._config26.plist</code>、<code>EFI/OC/Configs/._config26_bak.plist</code></li>
+  </ul>
+  <p>清理后校验关键文件未受影响：<code>OpenCore.efi</code> 仍是 mc11（<code>cec7d91a91e0</code>）、根目录 <code>config.plist</code> 与 <code>config27.plist</code> 仍是 <code>b2d1416d3eed</code>、<code>config26.plist</code> 为修正版 <code>cec900048694</code>。</p>
+  <div class="callout warn"><p><b>12 个回滚备份全部保留</b>（合计 5.56 MB，含 6 个历史 <code>OpenCore.efi.bak-*</code>、UTBMap 的 Info.plist 备份、<code>config26_bak.plist</code> 与本次原件备份）。它们有回滚价值，不属垃圾。</p></div>
+  <p>Configs 目录当前会被菜单列出的项：<code>config26</code>、<code>config26_bak</code>、<code>config27</code>。其中 <code>config26_bak.plist</code> 是自定义的原件备份，会作为一个独立启动项显示；不想看到就把它移出 <code>Configs/</code>。备份文件 <code>config26.plist.bak-20261115-053410</code> 不以 <code>.plist</code> 结尾，不会进菜单。</p>
+  <h3>回退</h3>
+  <p>把原件复制回去即可（往 FAT 卷写文件请用 Python 直写或 <code>COPYFILE_DISABLE=1</code>，避免再次生成 <code>._</code> 垃圾）：</p>
+  <div class="card"><code>cp /tmp/config26-official-review/config26.plist.original /Volumes/EFI/EFI/OC/Configs/config26.plist</code></div>
+  <p>生效方式：plist 在下次启动时读取，<b>无需重新编译或部署 EFI</b>；<code>OpenCore.efi</code> 本次完全未动。</p>
+</section>
+
+<section id="s7">
+  <div class="num">07</div><h2>口径说明</h2>
+  <footer style="border:none;padding:0;margin:0">
+    <p>依据版本：OpenCore 1.0.8（源码树内 <code>Docs/Configuration.tex</code>、<code>Docs/Sample.plist</code>、<code>Utilities/ocvalidate/ocvalidate</code>），全部本地读取，未联网。行号为 <code>Configuration.tex</code> 中的实际行号。</p>
+    <p>本报告只处理「官方有明确结论」的项；官方承认无法静态判定的 5 个内存映射 Quirk 保持原值，留待启动结果反馈。机型、序列号、DeviceProperties、ACPI / kext 清单等用户素材一律未改。</p>
+    <p>记录时刻：11-15 05:34（导出端本地时间 · 北京时间）。</p>
+  </footer>
+</section>
+
+</div></div>
+</body>
+</html>

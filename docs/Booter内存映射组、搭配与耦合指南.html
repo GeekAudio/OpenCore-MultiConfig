@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Booter 内存映射组 · 搭配与耦合指南</title>
+<style>
+  :root{
+    --ink:#1b2430; --ink2:#4a5766; --dim:#7c8899; --line:#dfe4ea;
+    --bg:#f7f8fa; --card:#ffffff; --soft:#f1f4f8;
+    --accent:#0f6e56; --accent-soft:#e1f5ee;
+    --warn:#a2531a; --warn-soft:#faeeda;
+    --bad:#a32d2d; --bad-soft:#fcebeb;
+    --info:#185fa5; --info-soft:#e6f1fb;
+    --rust:#9a4b2a;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:15px; line-height:1.75; -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.serif{font-family:"Songti SC","STSong","Noto Serif CJK SC",Georgia,serif}
+  a{color:var(--info); text-decoration:none}
+  a:hover{text-decoration:underline}
+  code,.mono{font-family:"SF Mono",Menlo,Consolas,monospace; font-size:.88em;
+    background:var(--soft); padding:1px 5px; border-radius:4px; color:#334; white-space:nowrap}
+
+  .rail{
+    position:fixed; left:0; top:0; bottom:0; width:218px; background:var(--card);
+    border-right:1px solid var(--line); padding:26px 18px; overflow-y:auto; z-index:5;
+  }
+  .rail .brand{font-size:13px; letter-spacing:.08em; color:var(--dim); text-transform:uppercase; margin-bottom:4px}
+  .rail .ttl{font-size:19px; line-height:1.4; margin:0 0 20px; font-weight:600}
+  .rail a{display:block; padding:6px 9px; margin:1px 0; border-radius:6px; color:var(--ink2); font-size:13.5px}
+  .rail a:hover{background:var(--soft); text-decoration:none; color:var(--ink)}
+  .rail .sep{height:1px; background:var(--line); margin:14px 0}
+  .rail .foot{font-size:12px; color:var(--dim); line-height:1.6; margin-top:18px}
+
+  .main{margin-left:218px; padding:0 0 90px}
+  .wrap{max-width:980px; margin:0 auto; padding:0 38px}
+  .mast{padding:52px 0 30px; border-bottom:1px solid var(--line); margin-bottom:36px}
+  .mast .kicker{color:var(--rust); font-size:13px; letter-spacing:.14em; margin-bottom:12px}
+  .mast h1{font-size:35px; line-height:1.3; margin:0 0 12px; font-weight:600}
+  .mast .sub{color:var(--ink2); font-size:16px; margin:0}
+  .mast .meta{color:var(--dim); font-size:13px; margin-top:16px}
+
+  section{margin:0 0 52px; scroll-margin-top:20px}
+  .num{display:inline-block; font-family:"SF Mono",Menlo,monospace; font-size:12px;
+    color:var(--accent); background:var(--accent-soft); padding:2px 8px; border-radius:5px; margin-bottom:10px}
+  h2{font-size:24px; margin:0 0 10px; font-weight:600; letter-spacing:.01em}
+  h3{font-size:18px; margin:26px 0 10px; font-weight:600}
+  h4{font-size:15px; margin:20px 0 8px; color:var(--ink2)}
+  p{margin:0 0 12px}
+  ul,ol{margin:0 0 14px; padding-left:22px}
+  li{margin:5px 0}
+  .lead{font-size:16.5px; color:var(--ink2)}
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:22px 24px; margin:16px 0}
+  .callout{border-left:4px solid var(--info); background:var(--info-soft); padding:14px 18px; border-radius:0 8px 8px 0; margin:16px 0; font-size:14.5px}
+  .callout.warn{border-color:var(--warn); background:var(--warn-soft)}
+  .callout.bad{border-color:var(--bad); background:var(--bad-soft)}
+  .callout.ok{border-color:var(--accent); background:var(--accent-soft)}
+  .callout b{color:var(--ink)}
+  .callout p:last-child{margin-bottom:0}
+
+  table{width:100%; border-collapse:collapse; margin:14px 0 20px; font-size:14px; background:var(--card);
+    border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th,td{padding:10px 12px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top}
+  th{background:var(--soft); font-weight:600; font-size:13px; color:var(--ink2); white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  td code{font-size:12.5px}
+  .tight td,.tight th{padding:8px 10px}
+
+  .tag{display:inline-block; font-size:12px; padding:1px 8px; border-radius:20px; font-weight:600; white-space:nowrap}
+  .t-on{background:var(--accent-soft); color:var(--accent)}
+  .t-off{background:#f0f1f3; color:#77808c}
+  .t-warn{background:var(--warn-soft); color:var(--warn)}
+  .t-bad{background:var(--bad-soft); color:var(--bad)}
+  .t-info{background:var(--info-soft); color:var(--info)}
+
+  .pill{display:inline-block; font-size:12px; padding:1px 7px; border-radius:5px;
+    background:var(--soft); color:var(--ink2); margin-right:5px}
+  .fig{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin:18px 0}
+  .fig svg{width:100%; height:auto; display:block}
+  .figcap{font-size:12.5px; color:var(--dim); margin-top:10px; text-align:center}
+
+  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px; margin:16px 0}
+  .mini{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 18px}
+  .mini h4{margin:0 0 6px; color:var(--ink); font-size:14.5px}
+  .mini p{font-size:13.5px; color:var(--ink2); margin:0}
+
+  .rule{display:flex; gap:14px; align-items:flex-start; padding:13px 0; border-bottom:1px dashed var(--line)}
+  .rule:last-child{border-bottom:none}
+  .rid{flex:0 0 42px; font-family:"SF Mono",Menlo,monospace; font-size:12px; color:var(--accent); padding-top:2px}
+  .rbody{flex:1}
+  .rbody b{display:block; margin-bottom:3px}
+  .rbody span{color:var(--ink2); font-size:14px}
+
+  .q{font-family:"Songti SC","STSong",serif; font-size:16px; color:var(--ink2);
+    border-left:3px solid var(--rust); padding:4px 0 4px 18px; margin:14px 0; line-height:1.8}
+
+  .footer{border-top:1px solid var(--line); margin-top:50px; padding-top:22px; font-size:13px; color:var(--dim)}
+  @media(max-width:900px){
+    .rail{position:static; width:auto; height:auto; border-right:none; border-bottom:1px solid var(--line)}
+    .main{margin-left:0} .wrap{padding:0 20px}
+  }
+  @media print{ .rail{display:none} .main{margin-left:0} body{background:#fff} }
+</style>
+</head>
+<body>
+
+<nav class="rail">
+  <div class="brand">OpenCore 1.0.8</div>
+  <div class="ttl">Booter 内存映射组<br>搭配与耦合指南</div>
+  <a href="#s0">00 先说结论</a>
+  <a href="#s1">01 为什么会卡住</a>
+  <a href="#s2">02 22 个开关分四组</a>
+  <a href="#s3">03 耦合关系图</a>
+  <a href="#s4">04 十二条硬规则</a>
+  <div class="sep"></div>
+  <a href="#s5">05 各种场景的推荐组合</a>
+  <a href="#s6">06 症状 → 该动哪个</a>
+  <a href="#s7">07 排错顺序</a>
+  <div class="sep"></div>
+  <a href="#s8">08 能自动判定的信号</a>
+  <a href="#s9">09 口径与出处</a>
+  <div class="foot">
+    依据 OpenCore 1.0.8 官方文档<br>
+    <code>Docs/Configuration.tex</code><br>
+    通用排错参考 · 不绑定具体机型
+  </div>
+</nav>
+
+<div class="main"><div class="wrap">
+
+<div class="mast">
+  <div class="kicker">OpenCore 通用技术笔记 · 规则底稿 01</div>
+  <h1>Booter 内存映射组<br>搭配与耦合指南</h1>
+  <p class="sub">为什么它会让开机「卡住」，22 个开关怎么分组、怎么互相牵制，以及每种情况该开哪一个。</p>
+  <div class="meta">依据 OpenCore 1.0.8 官方文档与中文参考手册 · 初稿 2026-11-15 · 通用化修订 2026-11-16</div>
+</div>
+
+<!-- 00 -->
+<section id="s0">
+  <span class="num">00</span>
+  <h2>先说结论</h2>
+  <p class="lead"><b>会。</b>内存映射这一组是「开机卡住」最典型的元凶之一，而且是最难查的一种：它死在 macOS 内核能打印出任何错误信息<b>之前</b>，所以你看到的往往只是黑屏、苹果标停住、或者直接重启，没有报错、没有崩溃栈、日志停在半路。</p>
+
+  <div class="q">官方原文：对于 RebuildAppleMemoryMap、EnableWriteUnprotector、ProtectMemoryRegions、SetupVirtualMap、SyncRuntimePermissions 这几项，「即使在相似的硬件上也没有确定的取值方法，可能必须试遍它们的各种组合」；而 SyncRuntimePermissions 的适用信号「包括黑屏卡住」。</div>
+
+  <div class="callout ok">
+    <b>但也别把所有卡住都算到它头上。</b>崩点明确落在 kext / 存储驱动的详细崩溃栈、禁止符号、卡在 <code>Still waiting for root device</code>，通常属于 kext、ACPI 或存储驱动，而不是内存映射。判断标准是：<b>越早死、越没输出，越可能是这一组</b>；反过来，早期引导崩溃也可能是 <code>SyncRuntimePermissions</code> 的信号（见 R2），别把「有崩溃栈」当成绝对排除条件。
+  </div>
+
+  <div class="grid">
+    <div class="mini"><h4>这一组一共多少开关</h4><p>Booter → Quirks 共 22 个，其中和内存映射 / 内存分配直接相关的约 14 个；另有几个在 UEFI → Quirks、Misc → Security 里，但和它强耦合。</p></div>
+    <div class="mini"><h4>为什么不能照抄别人的</h4><p>这些开关修的是「主板固件画出来的内存地图」和「苹果内核想读的样子」之间的差，差在哪块板子上都不一样。官方明确说没有通解。</p></div>
+    <div class="mini"><h4>好消息</h4><p>其中一大半其实有确定的判定信号（日志关键字、固件年代、机型、是否虚拟机），只有 5 个真的需要试。第 08 节把可自动判定的部分单列出来了。</p></div>
+  </div>
+
+  <div class="callout warn">
+    <b>先把「不是这一组」排掉。</b>官方给 <code>SyncRuntimePermissions</code> 写的适用信号很宽：<b>既包括黑屏挂起，也包括更明显的内核崩溃</b>，所以「有崩溃栈」不能一律排除。但下面三类仍与内存映射无关，别在这一组里空转：① 崩点明确落在第三方驱动或存储栈的完整 panic 栈；② 系统已起来、只是某个驱动或设备不工作（显示只剩基础帧缓冲、某个硬件端口消失等）；③ 某个 PCIe 设备<b>整体不枚举</b>，IORegistry 里连设备 ID 都找不到——那属于固件设置、板载设备开关或 ACPI 层。判据是：<b>这一组只管「固件把内存地图交给内核」那一步</b>，交接完成之后发生的事都往下查。
+  </div>
+</section>
+
+<!-- 01 -->
+<section id="s1">
+  <span class="num">01</span>
+  <h2>为什么会卡住：一次「交接」</h2>
+  <p>开机时 UEFI 固件要把机器交给 macOS 内核，交出去的东西里有一张<b>内存地图</b>：哪一段内存是什么用途、能不能读、能不能写、能不能当代码执行。真 Mac 的固件按苹果的规矩画；PC 主板固件各画各的。XNU 内核按苹果的规矩去读，读不对就当场死掉——这时候它连初始化日志都还没来得及开。</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 900 250" role="img" xmlns="http://www.w3.org/2000/svg">
+      <title>从固件内存地图到 macOS 内核的交接链路</title>
+      <desc>固件产出内存地图，Booter Quirks 分三层修正，最后交给 XNU 内核；任一层不匹配都会在打印错误前卡住。</desc>
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="#7c8899" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <rect x="20" y="60" width="150" height="90" rx="10" fill="#e6f1fb" stroke="#185fa5" stroke-width="1"/>
+      <text x="95" y="92" text-anchor="middle" font-size="15" font-weight="600" fill="#0c447c">UEFI 固件</text>
+      <text x="95" y="114" text-anchor="middle" font-size="12" fill="#185fa5">画一张内存地图</text>
+      <text x="95" y="133" text-anchor="middle" font-size="12" fill="#185fa5">（各家画法不同）</text>
+
+      <line x1="172" y1="105" x2="214" y2="105" stroke="#7c8899" stroke-width="1.5" marker-end="url(#ar)"/>
+
+      <rect x="218" y="30" width="450" height="190" rx="12" fill="#f1f4f8" stroke="#dfe4ea" stroke-width="1"/>
+      <text x="443" y="52" text-anchor="middle" font-size="13" fill="#7c8899">Booter Quirks · 把地图改写成苹果能读的样子</text>
+
+      <rect x="236" y="66" width="132" height="60" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="1"/>
+      <text x="302" y="90" text-anchor="middle" font-size="13" font-weight="600" fill="#085041">① 地图本身</text>
+      <text x="302" y="110" text-anchor="middle" font-size="11.5" fill="#0f6e56">太大 / 格式不对</text>
+
+      <rect x="378" y="66" width="132" height="60" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="1"/>
+      <text x="444" y="90" text-anchor="middle" font-size="13" font-weight="600" fill="#085041">② 权限标注</text>
+      <text x="444" y="110" text-anchor="middle" font-size="11.5" fill="#0f6e56">该写的不让写</text>
+
+      <rect x="520" y="66" width="132" height="60" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="1"/>
+      <text x="586" y="90" text-anchor="middle" font-size="13" font-weight="600" fill="#085041">③ 地址与空位</text>
+      <text x="586" y="110" text-anchor="middle" font-size="11.5" fill="#0f6e56">放不下内核 / 虚拟地址</text>
+
+      <rect x="236" y="140" width="416" height="58" rx="8" fill="#ffffff" stroke="#dfe4ea" stroke-width="1"/>
+      <text x="444" y="164" text-anchor="middle" font-size="12.5" fill="#4a5766">底座：OpenRuntime.efi 提供运行时协议</text>
+      <text x="444" y="183" text-anchor="middle" font-size="12.5" fill="#4a5766">ProtectUefiServices 防止固件把上述修正「改回去」</text>
+
+      <line x1="670" y1="105" x2="712" y2="105" stroke="#7c8899" stroke-width="1.5" marker-end="url(#ar)"/>
+
+      <rect x="716" y="60" width="164" height="90" rx="10" fill="#faeeda" stroke="#a2531a" stroke-width="1"/>
+      <text x="798" y="92" text-anchor="middle" font-size="15" font-weight="600" fill="#633806">XNU 内核</text>
+      <text x="798" y="114" text-anchor="middle" font-size="12" fill="#a2531a">按苹果规矩读地图</text>
+      <text x="798" y="133" text-anchor="middle" font-size="12" fill="#a2531a">读不懂 → 静默卡死</text>
+
+      <text x="443" y="238" text-anchor="middle" font-size="12" fill="#a32d2d">任一层不匹配，都会死在内核打印第一条错误之前</text>
+    </svg>
+    <div class="figcap">图 1 · 交接链路：Booter Quirks 本质是「内存地图翻译器」</div>
+  </div>
+
+  <h3>三个环节，对应三组开关</h3>
+  <table>
+    <tr><th style="width:110px">环节</th><th>固件常犯的毛病</th><th>后果</th><th>负责的开关</th></tr>
+    <tr><td><b>① 地图本身</b></td><td>地图条目太多（超过一页 4 KB）；权限表和地图对不上；相邻条目被错误合并</td><td>内核解析时崩溃、用完就放的内存被误释放</td><td><code>RebuildAppleMemoryMap</code></td></tr>
+    <tr><td><b>② 权限标注</b></td><td>把 OpenRuntime 标成「不可执行」；把代码页写保护开着；内存属性表丢了条目</td><td>调用 UEFI 运行时服务时崩，典型表现就是<b>黑屏卡住</b></td><td><code>SyncRuntimePermissions</code>、<code>EnableWriteUnprotector</code></td></tr>
+    <tr><td><b>③ 地址与空位</b></td><td>低位 4 GB 被占满，找不到地方放内核；MMIO 区域被标成运行时；固件在 SetVirtualAddressMap 之后还用虚拟地址访问内存</td><td>分配失败、KASLR slide 撞车、早期重启</td><td><code>ProvideCustomSlide</code> 一组、<code>DevirtualiseMmio</code>、<code>SetupVirtualMap</code></td></tr>
+  </table>
+
+  <div class="callout warn">
+    <b>一个常见误解：</b>这些不是「性能优化开关」，全开不会更好。每一个都是针对某一种固件缺陷的补丁，开在不需要它的机器上反而会引入新问题。官方文档对一整套「全开」的老配方明确写了 <i>strongly discouraged</i>（强烈不推荐）。
+  </div>
+</section>
+
+<!-- 02 -->
+<section id="s2">
+  <span class="num">02</span>
+  <h2>22 个开关，按「解决什么问题」分四组</h2>
+  <p>不要按字母顺序记。按下面的四组记，每组解决一类毛病，耦合也只发生在组内和组间少数几条线上。</p>
+
+  <div class="callout">
+    <b>先分清两个「默认值」。</b>官方中文参考手册给每一项标的是「<b>安全值（Failsafe）</b>」：Booter Quirks 里布尔项几乎全是 <code>false</code>，整数项是 <code>0</code> 或 <code>-1</code>。它表示「配置缺项或取值不合法时回退到什么」，<b>不是推荐值</b>。而随包附带的 <code>Docs/Sample.plist</code> 是一份能开机的示例，其中 <code>AvoidRuntimeDefrag</code>、<code>EnableWriteUnprotector</code>、<code>ProvideCustomSlide</code>、<code>EnableSafeModeSlide</code>、<code>SetupVirtualMap</code>、<code>FixupAppleEfiImages</code> 都是 <code>true</code>。下表这一列写的是 <b>Sample 值</b>，只作对照基线；它与 Failsafe 不一致是常态，不要据此判断谁对谁错，更别把 Sample 当成官方推荐组合。
+  </div>
+
+  <h3>A 组 · 运行时权限（最常导致「黑屏卡住」）</h3>
+  <table class="tight">
+    <tr><th style="width:230px">开关</th><th>一句人话</th><th style="width:78px">Sample 值</th></tr>
+    <tr><td><code>RebuildAppleMemoryMap</code></td><td>照着内存属性表，把整张地图重画成苹果内核能解析的样子</td><td><span class="tag t-off">关</span></td></tr>
+    <tr><td><code>SyncRuntimePermissions</code></td><td>把地图和属性表里的「可读/可写/可执行」标记对齐，尤其是别把 OpenRuntime 标成不可执行</td><td><span class="tag t-off">关</span></td></tr>
+    <tr><td><code>EnableWriteUnprotector</code></td><td>老办法：临时关掉 CR0 写保护，让运行时服务代码能写。<b>会削弱固件安全性</b></td><td><span class="tag t-on">开</span></td></tr>
+    <tr><td><code>ProtectUefiServices</code></td><td>有的固件（尤其 VMware、经 GRUB 链式加载）会在加载驱动时偷偷改 UEFI 服务指针，把上面几个的修正冲掉。这个负责守住</td><td><span class="tag t-off">关</span></td></tr>
+    <tr><td><code>AvoidRuntimeDefrag</code></td><td>阻止 boot.efi 搬动运行时服务的内存；否则某些用 SMM 存 NVRAM 的固件会失灵（时间、NVRAM、关机异常）。<b>除苹果和 VMware 外的 PC 几乎都需要</b></td><td><span class="tag t-on">开</span></td></tr>
+    <tr><td><code>ClearTaskSwitchBit</code></td><td>32/64 位混合内核时清掉 CR0 的 TS 位，避免 FPU 崩溃。只关旧系统 / Hyper-V</td><td><span class="tag t-off">关</span></td></tr>
+    <tr><td><code>DisableVariableWrite</code></td><td>禁止 macOS 写 NVRAM，安全选项；也可用来绕开固件写变量就崩的毛病</td><td><span class="tag t-off">关</span></td></tr>
+  </table>
+
+  <h3>B 组 · 虚拟地址与地图形态</h3>
+  <table class="tight">
+    <tr><th style="width:230px">开关</th><th>一句人话</th><th style="width:78px">Sample 值</th></tr>
+    <tr><td><code>SetupVirtualMap</code></td><td>有些固件在 SetVirtualAddressMap 之后还按虚拟地址访问内存 → 早期崩。这个提前做恒等映射兜住。<b>不兼容 32 位内核</b></td><td><span class="tag t-on">开</span></td></tr>
+    <tr><td><code>ProtectMemoryRegions</code></td><td>把 CSM 区、MMIO 区标成正确的内存类型。<b>官方说通常只有很老的固件才需要</b></td><td><span class="tag t-off">关</span></td></tr>
+    <tr><td><code>ForceExitBootServices</code></td><td>ExitBootServices 失败时抓一张新地图重试。<b>官方明说「不理解后果别用」</b></td><td><span class="tag t-off">关</span></td></tr>
+    <tr><td><code>DiscardHibernateMap</code></td><td>休眠唤醒时沿用旧地图。只为极少数老 Insyde 笔记本 / 与 Windows S4 共存设计，<b>别乱开</b></td><td><span class="tag t-off">关</span></td></tr>
+    <tr><td><code>ForceBooterSignature</code></td><td>休眠唤醒时把 booter 签名换成 OpenCore 的，用在真 Mac 固件上</td><td><span class="tag t-off">关</span></td></tr>
+  </table>
+
+  <h3>C 组 · KASLR slide 与低位内存（「放不下内核」那一类）</h3>
+  <p class="lead" style="font-size:14.5px">内核要被装进低 4 GB 里，位置是随机挑的（叫 <b>slide</b>）。固件把低位内存占得七零八落时，随机挑到「不能用」的值就直接启动失败——表现是<b>时好时坏、随机卡住</b>。</p>
+  <table class="tight">
+    <tr><th style="width:230px">开关</th><th>一句人话</th><th style="width:78px">Sample 值</th></tr>
+    <tr><td><code>ProvideCustomSlide</code></td><td>先分析地图，只从真正可用的 slide 里挑。判定信号：日志 <code>OCABC: Only N/256 slide values are usable!</code></td><td><span class="tag t-on">开</span></td></tr>
+    <tr><td><code>EnableSafeModeSlide</code></td><td>安全模式会强制 slide=0，这个打补丁让它也能用别的值。<b>必须先开 ProvideCustomSlide</b></td><td><span class="tag t-on">开</span></td></tr>
+    <tr><td><code>ProvideMaxSlide</code></td><td>整数（0／1–254），给 slide 上限封顶；随机启动失败时用。<b>必须先开 ProvideCustomSlide</b></td><td><span class="tag t-off">0</span></td></tr>
+    <tr><td><code>AllowRelocationBlock</code></td><td>低端内存被占满时，在<b>低 4 GB 之内</b>另找一块暂存缓冲装内核，内核启动前再拷回原本的低地址。<b>通常需要 ProvideCustomSlide + AvoidRuntimeDefrag</b>；官方末句：<b>仅在确实需要时才会使用重定位块</b>——启用 quirk 只是留一条退路，不等于每次启动都放弃休眠。与 macOS 11 及部分硬件不兼容</td><td><span class="tag t-off">关</span></td></tr>
+    <tr><td><code>DevirtualiseMmio</code></td><td>把 MMIO 区域的「运行时」属性摘掉，能腾出 64–256 MB、增加可用 slide。某些板子<b>不开就根本起不来</b>（分配错误）。很老的 Sandy Bridge 除外</td><td><span class="tag t-off">关</span></td></tr>
+    <tr><td><code>MmioWhitelist</code>（数组）</td><td>开了 DevirtualiseMmio 后，把 NVRAM / 休眠仍需要虚拟地址的那几个地址单独加回白名单</td><td><span class="tag t-off">空</span></td></tr>
+  </table>
+
+  <h3>D 组 · 不在 A–C 组里，却强耦合的开关</h3>
+  <table class="tight">
+    <tr><th style="width:230px">开关</th><th>和什么耦合</th></tr>
+    <tr><td><code>FixupAppleEfiImages</code></td><td>Misc → Security → <b>SecureBootModel</b>。官方：<b>SecureBootModel = Disabled 时，所有较新 macOS 都必须开</b>；走 Apple 安全启动路径时不用</td></tr>
+    <tr><td><code>ResizeAppleGpuBars</code></td><td>整数。<code>-1</code> 关闭，<code>0</code> 是唯一受支持的值（把显卡 BAR 缩到最小）。与 UEFI → <code>ResizeGpuBars</code> 联动，见 R7</td></tr>
+    <tr><td><code>ProtectSecureBoot</code></td><td>阻止系统写 db/dbx/PK/KEK；针对 NVRAM 有碎片问题的固件（MacPro5,1、部分 Insyde）</td></tr>
+    <tr><td><code>DisableSingleUser</code> / <code>SignalAppleOS</code> / <code>ProtectSecureBoot</code> 等</td><td>不属于内存映射，别在排查卡住时乱动</td></tr>
+  </table>
+</section>
+
+<!-- 03 -->
+<section id="s3">
+  <span class="num">03</span>
+  <h2>耦合关系图</h2>
+  <p>三种关系，颜色区分：<span class="tag t-bad">互斥</span> 绝对不能同时开；<span class="tag t-info">前置</span> 前者开了后者才有意义；<span class="tag t-on">保障</span> 前者保护后者不被固件冲掉。</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 900 430" role="img" xmlns="http://www.w3.org/2000/svg">
+      <title>Booter 内存映射开关的互斥、前置与保障关系</title>
+      <desc>MAT 支持与否决定 RebuildAppleMemoryMap 与 EnableWriteUnprotector 二选一；ProvideCustomSlide 是三个 slide 开关的前置；ProtectUefiServices 保障三个内存管理 quirk。</desc>
+      <defs>
+        <marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="#7c8899" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+
+      <text x="20" y="26" font-size="13" font-weight="600" fill="#1b2430">① 二选一：由固件是否支持内存属性表（MAT）决定</text>
+      <rect x="20" y="40" width="205" height="52" rx="9" fill="#e6f1fb" stroke="#185fa5"/>
+      <text x="122" y="61" text-anchor="middle" font-size="12.5" font-weight="600" fill="#0c447c">日志 OCABC: MAT support</text>
+      <text x="122" y="79" text-anchor="middle" font-size="12" fill="#185fa5">= 1 有 / = 0 无</text>
+
+      <line x1="227" y1="66" x2="268" y2="66" stroke="#7c8899" stroke-width="1.5" marker-end="url(#a2)"/>
+      <rect x="272" y="36" width="250" height="60" rx="9" fill="#e1f5ee" stroke="#0f6e56"/>
+      <text x="397" y="58" text-anchor="middle" font-size="12.5" font-weight="600" fill="#085041">MAT = 1（现代固件）</text>
+      <text x="397" y="78" text-anchor="middle" font-size="12" fill="#0f6e56">RebuildAppleMemoryMap ＋ SyncRuntimePermissions</text>
+      <rect x="272" y="106" width="250" height="52" rx="9" fill="#faeeda" stroke="#a2531a"/>
+      <text x="397" y="128" text-anchor="middle" font-size="12.5" font-weight="600" fill="#633806">MAT = 0 / 老固件</text>
+      <text x="397" y="146" text-anchor="middle" font-size="12" fill="#a2531a">EnableWriteUnprotector（不配对 Rebuild）</text>
+      <rect x="560" y="52" width="320" height="86" rx="9" fill="#fcebeb" stroke="#a32d2d"/>
+      <text x="720" y="78" text-anchor="middle" font-size="12.5" font-weight="600" fill="#791f1f">互斥</text>
+      <text x="720" y="99" text-anchor="middle" font-size="12" fill="#a32d2d">Rebuild 与 EnableWriteUnprotector 不要同时开</text>
+      <text x="720" y="118" text-anchor="middle" font-size="12" fill="#a32d2d">官方：前者在支持 MAT 的固件上取代后者</text>
+
+      <line x1="20" y1="180" x2="880" y2="180" stroke="#dfe4ea"/>
+
+      <text x="20" y="206" font-size="13" font-weight="600" fill="#1b2430">② 前置：ProvideCustomSlide 是这一串的总开关</text>
+      <rect x="20" y="220" width="200" height="56" rx="9" fill="#e6f1fb" stroke="#185fa5"/>
+      <text x="120" y="243" text-anchor="middle" font-size="12.5" font-weight="600" fill="#0c447c">ProvideCustomSlide</text>
+      <text x="120" y="261" text-anchor="middle" font-size="11.5" fill="#185fa5">先开它</text>
+      <line x1="222" y1="248" x2="262" y2="248" stroke="#7c8899" stroke-width="1.5" marker-end="url(#a2)"/>
+      <rect x="266" y="216" width="176" height="30" rx="7" fill="#ffffff" stroke="#dfe4ea"/>
+      <text x="354" y="236" text-anchor="middle" font-size="12" fill="#4a5766">EnableSafeModeSlide</text>
+      <rect x="266" y="252" width="176" height="30" rx="7" fill="#ffffff" stroke="#dfe4ea"/>
+      <text x="354" y="272" text-anchor="middle" font-size="12" fill="#4a5766">ProvideMaxSlide</text>
+      <rect x="266" y="288" width="176" height="30" rx="7" fill="#ffffff" stroke="#dfe4ea"/>
+      <text x="354" y="308" text-anchor="middle" font-size="12" fill="#4a5766">AllowRelocationBlock</text>
+      <rect x="466" y="216" width="414" height="102" rx="9" fill="#e6f1fb" stroke="#185fa5"/>
+      <text x="673" y="240" text-anchor="middle" font-size="12.5" font-weight="600" fill="#0c447c">AllowRelocationBlock 还要 AvoidRuntimeDefrag</text>
+      <text x="673" y="261" text-anchor="middle" font-size="12" fill="#185fa5">且与 macOS 11 / 部分硬件不兼容、不支持休眠</text>
+      <text x="673" y="282" text-anchor="middle" font-size="12" fill="#185fa5">冲突时官方建议改用 EnableSafeModeSlide</text>
+      <text x="673" y="303" text-anchor="middle" font-size="12" fill="#185fa5">DevirtualiseMmio 开了可能要补 MmioWhitelist</text>
+
+      <line x1="20" y1="336" x2="880" y2="336" stroke="#dfe4ea"/>
+
+      <text x="20" y="362" font-size="13" font-weight="600" fill="#1b2430">③ 保障：ProtectUefiServices 守住下面三个</text>
+      <rect x="20" y="376" width="200" height="42" rx="9" fill="#e1f5ee" stroke="#0f6e56"/>
+      <text x="120" y="402" text-anchor="middle" font-size="12.5" font-weight="600" fill="#085041">ProtectUefiServices</text>
+      <line x1="222" y1="397" x2="262" y2="397" stroke="#7c8899" stroke-width="1.5" marker-end="url(#a2)"/>
+      <rect x="266" y="376" width="614" height="42" rx="9" fill="#ffffff" stroke="#dfe4ea"/>
+      <text x="573" y="402" text-anchor="middle" font-size="12.5" fill="#4a5766">RebuildAppleMemoryMap ｜ ProtectMemoryRegions ｜ DevirtualiseMmio</text>
+    </svg>
+    <div class="figcap">图 2 · 三类耦合：互斥（红）、前置（蓝）、保障（绿）</div>
+  </div>
+
+  <div class="callout bad">
+    <b>图 2 中①是最容易配错的一条。</b>很多人把 <code>EnableWriteUnprotector</code> 和 <code>RebuildAppleMemoryMap</code> 一起开，以为「双保险」。官方写的是前者被后者<b>取代</b>，同时开属于重复修补同一件事，反而可能引入权限冲突。判定依据很明确：看调试日志里的 <code>OCABC: MAT support is 1/0</code>。
+  </div>
+</section>
+
+<!-- 04 -->
+<section id="s4">
+  <span class="num">04</span>
+  <h2>十二条硬规则</h2>
+  <p>这些是官方文档里写明、不依赖机型偏好的确定关系，可以直接当规则库用。</p>
+  <div class="card">
+    <div class="rule"><div class="rid">R1</div><div class="rbody"><b>互斥：RebuildAppleMemoryMap ↔ EnableWriteUnprotector</b><span>固件支持 MAT（日志 <code>OCABC: MAT support is 1</code>）→ 开 Rebuild、关 EnableWriteUnprotector；不支持 → 反过来。官方原话：前者「取代」后者。</span></div></div>
+    <div class="rule"><div class="rid">R2</div><div class="rbody"><b>常成对：RebuildAppleMemoryMap ＋ SyncRuntimePermissions</b><span>官方注 1：不少固件的内存保护表本身是错的，所以这个 quirk 常与 Sync 一起出现。Sync 的适用信号官方写的是「早期引导失败，<b>既包括黑屏挂起、也包括更明显的崩溃</b>」，且通常只影响 2017 年后发布的固件——别把「有崩溃栈」一律当成排除这一组的理由。</span></div></div>
+    <div class="rule"><div class="rid">R3</div><div class="rbody"><b>保障：ProtectUefiServices → 三个内存管理 quirk</b><span>VMware、部分现代固件、以及经 GRUB 链式加载时，固件会改 UEFI 服务指针，直接让 DevirtualiseMmio / ProtectMemoryRegions / RebuildAppleMemoryMap 失效。这些场合先开 ProtectUefiServices。</span></div></div>
+    <div class="rule"><div class="rid">R4</div><div class="rbody"><b>前置：ProvideCustomSlide → EnableSafeModeSlide / ProvideMaxSlide / AllowRelocationBlock</b><span>前两个官方明确写「requires enabling ProvideCustomSlide」；AllowRelocationBlock 通常还需要 <code>AvoidRuntimeDefrag</code> 一起开。</span></div></div>
+    <div class="rule"><div class="rid">R5</div><div class="rbody"><b>连带：DevirtualiseMmio → 可能要 MmioWhitelist</b><span>摘掉 MMIO 的运行时属性后，某些固件需要把 NVRAM / 休眠仍要用到的地址单独列进白名单，否则时间、NVRAM、休眠会出问题。条目要求该地址属于内存映射中的 <code>EfiMemoryMappedIO</code> 且带有 <code>EFI_MEMORY_RUNTIME</code> 属性，候选地址可从调试日志里找；<code>Sample.plist</code> 自带两条默认禁用的示例（Haswell 的 SB_RCBA、通用 PCI root）。</span></div></div>
+    <div class="rule"><div class="rid">R6</div><div class="rbody"><b>跨区：SecureBootModel = Disabled → FixupAppleEfiImages 必须开</b><span>官方：所有较新 macOS 在 SecureBootModel 为 Disabled 时都需要它；走 Apple 安全启动路径时不施加。</span></div></div>
+    <div class="rule"><div class="rid">R7</div><div class="rbody"><b>跨区：ResizeAppleGpuBars ↔ UEFI → ResizeGpuBars / ResizeUsePciRbIo</b><span>ResizeAppleGpuBars 只支持 <code>-1</code>（禁用）和 <code>0</code>（缩到最小 BAR）；ResizeGpuBars 是全局 BAR 设置，两者都由 <code>ResizeUsePciRbIo</code> 决定用 PciIo 还是 PciRootBridgeIo（老平台改 ReBarUEFI 报 Capability I/O Error 时切后者）。</span></div></div>
+    <div class="rule"><div class="rid">R8</div><div class="rbody"><b>近乎通用：AvoidRuntimeDefrag</b><span>官方：「除 Apple 和 VMware 外，大多数固件都需要这个 quirk」。这一项基本不用纠结，PC 上开着就行。</span></div></div>
+    <div class="rule"><div class="rid">R9</div><div class="rbody"><b>不兼容：SetupVirtualMap × 32 位内核</b><span>官方 Note 2 明确不兼容；只影响跑老系统的场合。</span></div></div>
+    <div class="rule"><div class="rid">R10</div><div class="rbody"><b>有条件的兜底：AllowRelocationBlock，不是「开了就废掉休眠」</b><span>官方末句：<b>启用该 quirk 时，仅在必要时才会使用重定位块</b>。三个触发条件（无更好的 slide、强制 <code>slide=0</code>、10.7 及更早不支持 KASLR）都不满足时，它只是静静地留一条退路；只有真的用到它启动，才不支持休眠。因此「适用条件不满足」≠「必须关闭」。真正要关的是另一种情况：在 macOS 11 或某些硬件上出现兼容冲突，此时官方建议改用 <code>EnableSafeModeSlide</code>。</span></div></div>
+    <div class="rule"><div class="rid">R11</div><div class="rbody"><b>总前提：OpenRuntime.efi</b><span>官方排错问答：「大多数配置都需要 OpenRuntime 驱动」；<code>EnableWriteUnprotector</code>、<code>ClearTaskSwitchBit</code>、<code>DisableVariableWrite</code> 等都明确要求其中的 OC_FIRMWARE_RUNTIME 协议。驱动没加载，这些开关全是空转。</span></div></div>
+    <div class="rule"><div class="rid">R12</div><div class="rbody"><b>别乱开：DiscardHibernateMap / ForceExitBootServices</b><span>两处都写着「不理解后果不要使用」，官方还说这两个「很少真正需要」。它们属于特定老硬件的救命选项，不是排查卡住时的常规尝试项。</span></div></div>
+  </div>
+</section>
+
+<!-- 05 -->
+<section id="s5">
+  <span class="num">05</span>
+  <h2>各种情况的推荐组合</h2>
+  <p>下表把常见场景逐个列全。<span class="tag t-on">开</span> = 建议开启，<span class="tag t-off">关</span> = 保持关闭，<span class="tag t-warn">试</span> = 官方说没有通解、需要试，<span class="tag t-info">看</span> = 由某个信号决定。</p>
+
+  <table class="tight">
+    <tr>
+      <th style="width:150px">场景</th>
+      <th>Rebuild</th><th>Sync</th><th>WriteUnprot</th><th>SetupVirtualMap</th><th>ProtectMemoryRegions</th>
+      <th>DevirtMmio</th><th>CustomSlide</th><th>ProtectUefiServices</th><th>备注</th>
+    </tr>
+    <tr>
+      <td><b>现代 Intel 台式机</b><br><span style="color:var(--dim);font-size:12px">Z690 / B660 等、12–14 代、macOS 11+</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-on">开</span></td><td><span class="tag t-off">关</span></td>
+      <td><span class="tag t-warn">试</span></td><td><span class="tag t-off">关</span></td><td><span class="tag t-info">看</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-info">看</span></td>
+      <td>2017 后固件 → Sync 大概率要；MAT=1 → Rebuild 路线。分配错误才开 DevirtMmio</td>
+    </tr>
+    <tr>
+      <td><b>2017 年前固件</b><br><span style="color:var(--dim);font-size:12px">Haswell / Broadwell 等</span></td>
+      <td><span class="tag t-warn">试</span></td><td><span class="tag t-off">关</span></td><td><span class="tag t-warn">试</span></td>
+      <td><span class="tag t-warn">试</span></td><td><span class="tag t-warn">试</span></td><td><span class="tag t-info">看</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-off">关</span></td>
+      <td>MAT 多半不支持 → 偏 EnableWriteUnprotector；ProtectMemoryRegions 在这里比新平台常见</td>
+    </tr>
+    <tr>
+      <td><b>Sandy Bridge 及更老</b></td>
+      <td><span class="tag t-warn">试</span></td><td><span class="tag t-off">关</span></td><td><span class="tag t-on">开</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-on">开</span></td><td><span class="tag t-off">关</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-off">关</span></td>
+      <td>官方点名：DevirtualiseMmio 对这类很老的固件<b>不适用</b></td>
+    </tr>
+    <tr>
+      <td><b>Ivy Bridge 笔记本</b><br><span style="color:var(--dim);font-size:12px">Acer V3-571G 等 Insyde</span></td>
+      <td><span class="tag t-warn">试</span></td><td><span class="tag t-off">关</span></td><td><span class="tag t-on">开</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-warn">试</span></td><td><span class="tag t-off">关</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-off">关</span></td>
+      <td>休眠唤醒异常时才考虑 DiscardHibernateMap（官方举的正是这个例子）</td>
+    </tr>
+    <tr>
+      <td><b>VMware 虚拟机</b></td>
+      <td><span class="tag t-warn">试</span></td><td><span class="tag t-warn">试</span></td><td><span class="tag t-off">关</span></td>
+      <td><span class="tag t-warn">试</span></td><td><span class="tag t-off">关</span></td><td><span class="tag t-off">关</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-on">开</span></td>
+      <td>官方：VMware 常需要 ProtectUefiServices；AvoidRuntimeDefrag 是少数<b>可以不需</b>的场合之一</td>
+    </tr>
+    <tr>
+      <td><b>经 GRUB / Shim 链式加载</b></td>
+      <td><span class="tag t-info">看</span></td><td><span class="tag t-info">看</span></td><td><span class="tag t-info">看</span></td>
+      <td><span class="tag t-info">看</span></td><td><span class="tag t-info">看</span></td><td><span class="tag t-info">看</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-on">开</span></td>
+      <td>官方 Note 2：BIOS Secure Boot + GRUB 链式加载时 ProtectUefiServices <b>必须开</b>；另配合 UEFI → ShimRetainProtocol</td>
+    </tr>
+    <tr>
+      <td><b>macOS 10.7 及更早</b><br><span style="color:var(--dim);font-size:12px">或 32 位内核</span></td>
+      <td><span class="tag t-off">关</span></td><td><span class="tag t-off">关</span></td><td><span class="tag t-on">开</span></td>
+      <td><span class="tag t-off">关</span></td><td><span class="tag t-warn">试</span></td><td><span class="tag t-off">关</span></td>
+      <td><span class="tag t-info">看</span></td><td><span class="tag t-off">关</span></td>
+      <td>SetupVirtualMap 不兼容 32 位内核；AllowRelocationBlock、ClearTaskSwitchBit 是这类老系统的专属项</td>
+    </tr>
+    <tr>
+      <td><b>macOS 10.4–10.12</b></td>
+      <td><span class="tag t-info">看</span></td><td><span class="tag t-off">关</span></td><td><span class="tag t-warn">试</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-warn">试</span></td><td><span class="tag t-off">关</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-off">关</span></td>
+      <td>FixupAppleEfiImages 在这个版本段是<b>必须</b>的（严格 PE 加载器会拒绝旧 boot.efi）</td>
+    </tr>
+    <tr>
+      <td><b>安全模式进不去</b><br><span style="color:var(--dim);font-size:12px">按 Shift 或 -x</span></td>
+      <td><span class="tag t-info">看</span></td><td><span class="tag t-info">看</span></td><td><span class="tag t-info">看</span></td>
+      <td><span class="tag t-info">看</span></td><td><span class="tag t-info">看</span></td><td><span class="tag t-info">看</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-info">看</span></td>
+      <td>关键在 <b>EnableSafeModeSlide</b>（需 ProvideCustomSlide）：安全模式强制 slide=0，补丁让它改用别的值</td>
+    </tr>
+    <tr>
+      <td><b>NVRAM / 时间不保存</b><br><span style="color:var(--dim);font-size:12px">睡眠唤醒异常</span></td>
+      <td><span class="tag t-info">看</span></td><td><span class="tag t-info">看</span></td><td><span class="tag t-info">看</span></td>
+      <td><span class="tag t-info">看</span></td><td><span class="tag t-warn">试</span></td><td><span class="tag t-warn">试</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-info">看</span></td>
+      <td>先确认 AvoidRuntimeDefrag 已开；若开了 DevirtMmio，用 MmioWhitelist 补地址；ProtectMemoryRegions 由「睡眠唤醒问题」信号判定</td>
+    </tr>
+    <tr>
+      <td><b>Windows 双系统 / S4 休眠</b></td>
+      <td><span class="tag t-info">看</span></td><td><span class="tag t-info">看</span></td><td><span class="tag t-info">看</span></td>
+      <td><span class="tag t-info">看</span></td><td><span class="tag t-off">关</span></td><td><span class="tag t-info">看</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-off">关</span></td>
+      <td>DiscardHibernateMap 是给 Windows S4 要求的「唤醒后内存位置不变」准备的，但官方强调别乱开</td>
+    </tr>
+    <tr>
+      <td><b>SecureBootModel 启用</b></td>
+      <td><span class="tag t-info">看</span></td><td><span class="tag t-info">看</span></td><td><span class="tag t-info">看</span></td>
+      <td><span class="tag t-info">看</span></td><td><span class="tag t-info">看</span></td><td><span class="tag t-info">看</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-info">看</span></td>
+      <td>走 Apple 安全启动路径时 FixupAppleEfiImages 不施加；设为 <b>Disabled</b> 则必须开（R6）</td>
+    </tr>
+    <tr>
+      <td><b>Above 4G / Resizable BAR</b><br><span style="color:var(--dim);font-size:12px">大显存显卡</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-on">开</span></td><td><span class="tag t-off">关</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-off">关</span></td><td><span class="tag t-warn">试</span></td>
+      <td><span class="tag t-on">开</span></td><td><span class="tag t-info">看</span></td>
+      <td>另外看 UEFI → ResizeGpuBars、Booter → ResizeAppleGpuBars（0 或 -1）；报 Capability I/O Error 时开 ResizeUsePciRbIo（R7）</td>
+    </tr>
+  </table>
+
+  <div class="callout warn">
+    <b>关于那套「全开」的老配方。</b>官方文档给出过一份等价于旧 AptioMemoryFix 的组合（ProvideConsoleGop、AvoidRuntimeDefrag、DiscardHibernateMap、EnableSafeModeSlide、EnableWriteUnprotector、ForceExitBootServices、ProtectMemoryRegions、ProvideCustomSlide、RebuildAppleMemoryMap、SetupVirtualMap），但紧接着写明<b>如今强烈不推荐</b>：其中若干已无必要、另一些还缺配套项（常需要 DevirtualiseMmio 和 ProtectUefiServices，而 DiscardHibernateMap、ForceExitBootServices 很少需要）。网上流传的「通用配置」多半就是这一套，别直接抄。
+  </div>
+</section>
+
+<!-- 06 -->
+<section id="s6">
+  <span class="num">06</span>
+  <h2>症状 → 该动哪个</h2>
+  <p>卡住时先记下<b>屏幕上最后一行</b>或调试日志里最后几条，再按这张表定位。从上往下匹配，越靠前越早死。</p>
+  <table>
+    <tr><th style="width:290px">看到的现象 / 日志</th><th>属于哪一层</th><th>该动哪个开关</th></tr>
+    <tr>
+      <td><b>黑屏、无苹果标、立刻重启</b>，几乎没有任何输出</td>
+      <td>② 权限标注</td>
+      <td><code>SyncRuntimePermissions</code> → 再试 <code>SetupVirtualMap</code> 取反 → 再试 <code>RebuildAppleMemoryMap</code>。官方明确把「黑屏卡住」列为 Sync 的适用信号</td>
+    </tr>
+    <tr>
+      <td>卡在 <code>[EB|#LOG:EXITBS:START]</code> 或 <code>EndRandomSeed</code></td>
+      <td>③ 地址与空位</td>
+      <td>先确认 <code>ProvideCustomSlide</code> 开着；再看 <code>DevirtualiseMmio</code>（腾出低位内存）；必要时 <code>MmioWhitelist</code></td>
+    </tr>
+    <tr>
+      <td>日志 <code>OCABC: MAT support is 1/0</code></td>
+      <td>① 路线选择</td>
+      <td><b>1</b> → Rebuild＋Sync、关 WriteUnprotector；<b>0</b> → 反过来（R1）</td>
+    </tr>
+    <tr>
+      <td>日志 <code>OCABC: Only N/256 slide values are usable!</code></td>
+      <td>③ slide</td>
+      <td>开 <code>ProvideCustomSlide</code>（官方给的判定信号就是这个）</td>
+    </tr>
+    <tr>
+      <td>日志 <code>AAPL: [EB|LD:LKC] Err(0x9)</code>、<b>时好时坏</b>随机启动失败</td>
+      <td>③ slide 上限</td>
+      <td>用 <code>slide=X</code> 逐个试出最大可用值，写进 <code>ProvideMaxSlide</code>；需 ProvideCustomSlide</td>
+    </tr>
+    <tr>
+      <td>引导阶段 <b>allocation error</b> / 分配失败 / 低位内存不足</td>
+      <td>③ MMIO</td>
+      <td>开 <code>DevirtualiseMmio</code>（官方：某些平台不开就根本起不来，可腾 64–256 MB）；再补 <code>MmioWhitelist</code></td>
+    </tr>
+    <tr>
+      <td>安全模式（Shift / <code>-x</code>）进不去，正常模式没事</td>
+      <td>③ slide=0</td>
+      <td><code>EnableSafeModeSlide</code> + <code>ProvideCustomSlide</code>（R4）</td>
+    </tr>
+    <tr>
+      <td>时间/日期重置、NVRAM 写不进、关机异常、睡眠唤醒黑屏</td>
+      <td>运行时服务 / MMIO</td>
+      <td>先确认 <code>AvoidRuntimeDefrag</code>；再看 <code>ProtectMemoryRegions</code>、<code>MmioWhitelist</code>；VMware/GRUB 场合加 <code>ProtectUefiServices</code></td>
+    </tr>
+    <tr>
+      <td>PCI 初始化阶段卡住 / <code>Capability I/O Error</code></td>
+      <td>显卡 BAR（跨区）</td>
+      <td>UEFI → <code>ResizeGpuBars</code>、Booter → <code>ResizeAppleGpuBars</code>、<code>ResizeUsePciRbIo</code>（R7）</td>
+    </tr>
+    <tr>
+      <td><b>某个 PCIe 设备整体不枚举</b>：系统报告里该硬件端口为空、IORegistry 找不到设备 ID、硬件端口列表少了一项</td>
+      <td><b>固件 / 设备层，不是这一组</b></td>
+      <td>先查 BIOS 里的板载设备开关（Onboard LAN / Controller 等）与固件设置是否被重置，再看设备是否被 ACPI 屏蔽。内存映射 quirk 不会让一个 PCIe 设备从配置空间里消失</td>
+    </tr>
+    <tr>
+      <td><b>系统能起来，但只显示基础帧缓冲 / 某个驱动不工作</b></td>
+      <td><b>驱动层，不是这一组</b></td>
+      <td>查 kext 是否加载、IOKit 是否建立实例、有无 panic 栈。这类失败发生在「交接」完成之后</td>
+    </tr>
+    <tr>
+      <td>崩点明确落在第三方 kext / 存储栈的完整 panic 栈、禁止符号、<code>Still waiting for root device</code></td>
+      <td><b>通常不是这一组</b></td>
+      <td>转向 kext / ACPI / 存储驱动排查。但注意 R2：早期引导崩溃也可能是 Sync 的信号，若崩点不明且反复出现，仍要回头试这一组</td>
+    </tr>
+  </table>
+
+  <div class="callout bad">
+    <b>一次只改一个。</b>官方排错问答的原话是「逐个检查 Quirks」，并承认那 5 个没有确定方法、可能要试各种组合。同时改三个开关，就算碰巧能开机，你也不知道是哪个起了作用，下次换系统版本又会踩回去。把每套组合存成独立配置文件、开机时直接选择，比反复改同一个文件更安全，也更容易回退。
+  </div>
+</section>
+
+<!-- 07 -->
+<section id="s7">
+  <span class="num">07</span>
+  <h2>排错顺序</h2>
+  <div class="card">
+    <ol>
+      <li><b>先取证，判归属</b>，再决定要不要碰这一组：能拿到 panic 栈就看崩点；设备树里连设备都枚举不到就查固件；只有日志停在内核打印第一条错误之前、反复黑屏或立刻重启，才进入本组。DEBUG 构建可开 <code>Misc → Debug → SysReport</code>——OpenCore 在把控制权交给内核<b>之前</b>就会把 ACPI、SMBIOS 等固件表转储到 ESP 的 <code>SysReport/</code>，即使后续黑屏也拿得到现场（<b>RELEASE 构建没有此选项</b>）。</li>
+      <li><b>先把调试打开</b>，否则后面全是盲猜：<code>Misc→Debug→AppleDebug / ApplePanic / DisableWatchDog = 开</code>、<code>ShowPicker = 开</code>，boot-args 加 <code>-v debug=0x100 keepsyms=1</code>。日志落不下来时用串口或 UEFI Shell 看早期输出。</li>
+      <li><b>确认前提</b>：<code>OpenRuntime.efi</code> 在 UEFI→Drivers 里且已加载（R11）。这一步没过，下面全白试。</li>
+      <li><b>先定路线</b>：查 <code>OCABC: MAT support</code>，按 R1 决定 Rebuild 还是 EnableWriteUnprotector，并按 R2 决定是否配 Sync。</li>
+      <li><b>再定底座</b>：VMware / GRUB 链式加载 / 现代固件改服务指针的场合，开 <code>ProtectUefiServices</code>（R3）。</li>
+      <li><b>再定 slide</b>：<code>ProvideCustomSlide</code> 及其两个下游（R4）；出现分配错误才动 <code>DevirtualiseMmio</code> 和 <code>MmioWhitelist</code>。</li>
+      <li><b>最后才试那 5 个没有通解的</b>：Rebuild / EnableWriteUnprotector / ProtectMemoryRegions / SetupVirtualMap / SyncRuntimePermissions，一次一个、组合逐个过。</li>
+      <li><b>每次只改一个、记下来、重启验证</b>；稳定后把组合固化成一个独立 config，别在能开机的配置上继续「优化」。</li>
+    </ol>
+  </div>
+</section>
+
+<!-- 08 -->
+<section id="s8">
+  <span class="num">08</span>
+  <h2>哪些能自动判定（给规则库用的信号表）</h2>
+  <p>把官方文档里的「判定信号」抽出来，大部分开关能写成确定规则，只有 5 个必须靠启动结果反馈。下表可直接作为规则库或配置生成器的输入；末尾几行是<b>反向信号</b>，用来判断「根本不该动这一组」。</p>
+
+  <table>
+    <tr><th style="width:330px">可观测信号</th><th>自动得出的结论</th></tr>
+    <tr><td><code>OCABC: MAT support is 1</code></td><td>Rebuild = 开、Sync = 开、EnableWriteUnprotector = 关</td></tr>
+    <tr><td><code>OCABC: MAT support is 0</code></td><td>Rebuild = 关、EnableWriteUnprotector = 开</td></tr>
+    <tr><td><code>OCABC: Only N/256 slide values are usable!</code></td><td>ProvideCustomSlide = 开</td></tr>
+    <tr><td><code>AAPL: [EB|LD:LKC] Err(0x9)</code> / 随机失败</td><td>ProvideMaxSlide = 试出的最大可用 slide</td></tr>
+    <tr><td>引导阶段 allocation error</td><td>DevirtualiseMmio = 开，并生成 MmioWhitelist</td></tr>
+    <tr><td>固件发布日期 ≥ 2017</td><td>SyncRuntimePermissions 列为高优先候选</td></tr>
+    <tr><td>VMware / 经 GRUB 链式加载</td><td>ProtectUefiServices = 开；AvoidRuntimeDefrag 可豁免。VMware 上的判定信号是出现「<i>Your Mac OS guest might run unreliably with more than one virtual core.</i>」</td></tr>
+    <tr><td>真 Mac / VMware 之外的 PC 固件</td><td>AvoidRuntimeDefrag = 开</td></tr>
+    <tr><td><code>SecureBootModel = Disabled</code> + 较新 macOS</td><td>FixupAppleEfiImages = 开（严格 PE 加载器上的 10.4–10.12 同样需要）</td></tr>
+    <tr><td>32 位内核 / macOS ≤ 10.7</td><td>SetupVirtualMap = 关；启用 relocation block 相关项</td></tr>
+    <tr><td>SecureBootModel ≠ Disabled</td><td>FixupAppleEfiImages 不施加（走 Apple 安全启动路径）</td></tr>
+    <tr><td>macOS 11+ 或需休眠</td><td><b>不再简单判为「关」</b>：只有确认 relocation block 被实际使用、或在 macOS 11 / 特定硬件上出现兼容冲突时，才关 <code>AllowRelocationBlock</code> 并改用 <code>EnableSafeModeSlide</code>（见 R10）</td></tr>
+    <tr><td>崩点明确落在第三方驱动 / 存储栈的完整 panic 栈</td><td><b>不属于这一组</b>：转向 kext / ACPI / 存储驱动</td></tr>
+    <tr><td>某个 PCIe 设备在 IORegistry 里整体不枚举</td><td><b>不属于这一组</b>：转向固件设置 / 板载设备开关 / ACPI</td></tr>
+    <tr><td>系统已起来、只显示基础帧缓冲或某设备不工作</td><td><b>不属于这一组</b>：转向驱动加载与 IOKit 实例检查</td></tr>
+  </table>
+
+  <div class="callout warn">
+    <b>剩下的 5 个是硬骨头：</b>RebuildAppleMemoryMap、EnableWriteUnprotector、ProtectMemoryRegions、SetupVirtualMap、SyncRuntimePermissions——官方文档明说「没有确定方法，可能要试遍所有组合」。因此，若要做到完全免干预，光有静态规则表不够：除了配置生成器，还需要一层<b>启动结果反馈</b>——记住上次成功的组合、启动失败自动回退并试下一组候选、收敛后锁定。
+  </div>
+</section>
+
+<!-- 09 -->
+<section id="s9">
+  <span class="num">09</span>
+  <h2>口径与出处</h2>
+  <ul>
+    <li>条目依据 OpenCore 1.0.8 官方文档 <code>Docs/Configuration.tex</code> 的 <i>Booter → Quirks Properties</i> 章节、<i>Troubleshooting → How can I decide which Booter quirks to use?</i> 问答，以及中文《OpenCore 配置参考手册 1.0.8》第 5.5 节与第 12.5 节。中英文措辞有出入时以英文原文为准（本次即据此更正了重定位块的位置）。</li>
+    <li>「安全值（Failsafe）」与「Sample 值」的区别见第 02 节；第 02 节表格的对照列取自 <code>Docs/Sample.plist</code>，<b>不是推荐值</b>。</li>
+    <li>文中「开／关」对应 plist 布尔 <code>true／false</code>；整数项（ProvideMaxSlide、ResizeAppleGpuBars）单独标注了取值。</li>
+    <li>「试」表示该场景官方未给定解、需要逐个组合验证；第 05 节表格是快速索引，具体判定仍以第 04 节硬规则和调试日志为准。</li>
+    <li>本指南为通用排错参考与规则底稿，<b>不绑定任何具体机型或某一份 config.plist</b>。套用到具体机器时请另做逐项比对，并保留可回退的配置副本。</li>
+    <li><b>修订记录</b>：2026-11-15 初稿；2026-11-16 移除单机对照、按官方原文更正 <code>AllowRelocationBlock</code>（重定位块位于低 4 GB 内、仅必要时使用）、区分 Failsafe 与 Sample 值、补充「排除边界」与取证手段。</li>
+  </ul>
+  <div class="footer">
+    OpenCore 1.0.8 · Booter 内存映射组搭配与耦合指南 · 通用版
+  </div>
+</section>
+
+</div></div>
+</body>
+</html>
