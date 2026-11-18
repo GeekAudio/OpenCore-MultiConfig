@@ -81,7 +81,20 @@ Two insertion points, and nothing else:
 | `Application/OpenCore/OpenCore.c` | Applies the boot-args override after `OcLoadNvramSupport` |
 | `Library/OcMainLib/OcMainLib.inf`, `Include/.../OcMainLib.h` | Wiring |
 
-The full diff against upstream 1.0.8 is in [`patches/ocmc-1.0.8.patch`](patches/ocmc-1.0.8.patch).
+The full diff against upstream 1.0.8 is in [`patches/ocmc-1.0.8.patch`](patches/ocmc-1.0.8.patch)
+(8 files, ~2900 lines, includes the three new sources). It applies cleanly to a pristine
+1.0.8 tree:
+
+```bash
+git apply patches/ocmc-1.0.8.patch
+```
+
+To move the changes onto a newer upstream release, see
+[`docs/upstream-sync.md`](docs/upstream-sync.md) — the short version is
+`./tools/sync-upstream.sh 1.1.0`, which replays the OCMC commit on top of the new tag
+and regenerates the patch. This repository is not a GitHub fork of OpenCorePkg by design;
+the upstream baseline lives in a local git repository (`源码/ocmc-git`, tags
+`upstream-*` / `ocmc-*`) rather than in a fork relationship.
 
 ### Build
 
