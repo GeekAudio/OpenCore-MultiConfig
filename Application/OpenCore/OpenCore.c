@@ -136,6 +136,11 @@ OcMain (
 
   DEBUG ((DEBUG_INFO, "OC: OcLoadNvramSupport...\n"));
   OcLoadNvramSupport (Storage, &mOpenCoreConfiguration);
+  //
+  // Override boot-args chosen in the configuration menu. Written after the
+  // plist values as a volatile variable, so it lasts one boot only.
+  //
+  OcConfigMenuApplyBootArgs ();
   DEBUG ((DEBUG_INFO, "OC: OcMiscMiddleInit...\n"));
   OcMiscMiddleInit (
     Storage,

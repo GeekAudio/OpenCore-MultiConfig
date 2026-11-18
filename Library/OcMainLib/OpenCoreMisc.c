@@ -449,10 +449,18 @@ OcMiscEarlyInit (
   CONST CHAR8     *AsciiVault;
   OCS_VAULT_MODE  Vault;
   UINTN           PciDeviceInfoSize;
+  CONST CHAR16    *ConfigPath;
+
+  //
+  // Allow the user to pick one of several configuration files and to adjust
+  // boot arguments for this boot only. Must happen before the configuration
+  // is read, as the whole initialisation chain depends on it.
+  //
+  ConfigPath = OcConfigMenuSelect (Storage);
 
   ConfigData = OcStorageReadFileUnicode (
                  Storage,
-                 OPEN_CORE_CONFIG_PATH,
+                 ConfigPath,
                  &ConfigDataSize
                  );
 

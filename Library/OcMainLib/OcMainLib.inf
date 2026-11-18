@@ -22,6 +22,8 @@
 
 [Sources]
   OpenCoreAcpi.c
+  OpenCoreConfigGfx.c
+  OpenCoreConfigMenu.c
   OpenCoreDevProps.c
   OpenCoreKernel.c
   OpenCoreKernelPatch.c
