@@ -115,6 +115,23 @@ sudo ./install-ocmc.command        # mounts the boot ESP, backs up, copies, veri
 Or by hand: copy `out/DEBUG/OpenCore.efi` over `EFI/OC/OpenCore.efi`, then create
 `EFI/OC/Configs/` and drop your alternative plists in.
 
+### Verify a configuration (`ocvalidate`)
+
+The archive ships **`ocvalidate`**, the official OpenCore 1.0.8 configuration
+checker (universal binary, x86_64 + arm64, no external dependencies). Run it
+against every plist before booting:
+
+```bash
+./ocvalidate "/Volumes/EFI/EFI/OC/config.plist"
+./ocvalidate "/Volumes/EFI/EFI/OC/Configs/"*.plist
+```
+
+`No issues found` means the file matches the 1.0.8 schema. Anything else means
+missing or illegal keys — fix those before the file goes near the boot menu.
+
+简体：压缩包内附官方 `ocvalidate`（与 OpenCore 1.0.8 配套，x86_64 + arm64 通用二进制，
+无外部依赖）。改完配置先跑一遍，只有输出 `No issues found` 才算合格。
+
 ### Notes and limits
 
 - `Misc → Security → Vault` must be `Optional` or `Basic`. `Secure` hashes every file in
